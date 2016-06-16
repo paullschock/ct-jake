@@ -1,0 +1,2030 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "AWS Cloudformation script to deploy a VPC",
+  "Parameters": {
+    "VPCOctet": {
+      "Description": "First two octets of the VPC",
+      "Type": "String",
+      "MinLength": "4",
+      "MaxLength": "7",
+      "AllowedPattern": "[0-9]{2,3}.[0-9]{1,3}",
+      "ConstraintDescription": "must only be the first two octets without a trailing period"
+    },
+    "Environment": {
+      "Description": "Environment to allocate costs to",
+      "Type": "String"
+    },
+    "Customer": {
+      "Description" :"Name of the customer",
+      "Type": "String"
+    },
+    "VGWId": {
+      "Type": "String",
+      "Description": "ID of the VGW to attach to the VPC",
+      "MaxLength": "12",
+      "AllowedPattern": "vgw-[a-zA-Z0-9]{8}",
+      "ConstraintDescription": "must be a valid VGW",
+      "Default": "vgw-12345678"
+    },
+    "AttachVPN": {
+      "Default": "false",
+      "Description": "Boolean to attach VGW to create VPN",
+      "Type": "String",
+      "AllowedValues": [
+        "true",
+        "false"
+      ]
+    },
+    "AttachIGW": {
+      "Default": "true",
+      "Type": "String",
+      "Description": "Boolean to attach an Internet Gateway to the VPC",
+      "AllowedValues": [
+        "true",
+        "false"
+      ]
+    },
+    "DomainName": {
+      "Type": "String",
+      "Description": "Domain name"
+    },
+    "DNSServers": {
+      "Default": "AmazonProvidedDNS",
+      "Type": "CommaDelimitedList",
+      "Description": "Comma separated list of DNS server IP addresses"
+    },
+    "VPCTenancy": {
+      "Default": "default",
+      "Type": "String",
+      "Description": "The tenancy of the instances launched in this VPC.  If dedicated, all instances will be dedicated tenancy regardless of the tenancy option you specify when you launch the instance",
+      "AllowedValues": [
+        "default",
+        "dedicated"
+      ]
+    },
+    "EnableVPCDNSSupport": {
+      "Default": "true",
+      "Type": "String",
+      "Description": "Is Amazon DNS resolution supported for the VPC",
+      "AllowedValues": [
+        "true",
+        "false"
+      ]
+    },
+    "EnableDNSHostnameSupport": {
+      "Default": "true",
+      "Type": "String",
+      "Description": "Allow instances launched in the VPC get Amazon DNS hostnames",
+      "AllowedValues": [
+        "true",
+        "false"
+      ]
+    },
+    "Region": {
+      "Default": "SYD",
+      "Type": "String",
+      "Description": "Region to deploy to.  First 3 letters of region in capitals, e.g. SYD, IRE"
+    }
+  },
+  "Conditions": {
+    "AttachVGWtoVPCCondition": {
+      "Fn::Equals": [
+        {
+          "Ref": "AttachVPN"
+        },
+        "true"
+      ]
+    },
+    "AttachIGWtoVPCCondition": {
+      "Fn::Equals": [
+        {
+          "Ref": "AttachIGW"
+        },
+        "true"
+      ]
+    }
+  },
+  "Mappings": {
+    "SubnetConfig": {
+      "VPC": {
+        "CIDR": "0.0/16"
+      },
+      "AdminA": {
+        "CIDR": "255.128/25"
+      },
+      "AdminB": {
+        "CIDR": "255.0/25"
+      },
+      "WebA": {
+        "CIDR": "2.0/24"
+      },
+      "WebB": {
+        "CIDR": "3.0/24"
+      },
+      "SecurityA": {
+        "CIDR": "254.0/25"
+      },
+      "SecurityB": {
+        "CIDR": "254.128/25"
+      },
+      "DataA": {
+        "CIDR": "6.0/24"
+      },
+      "DataB": {
+        "CIDR": "7.0/24"
+      }
+    },
+    "AvailabilityZones": {
+      "ap-southeast-2": {
+        "ZoneA": "ap-southeast-2a",
+        "ZoneB": "ap-southeast-2b"
+      },
+      "eu-west-1": {
+        "ZoneA": "eu-west-1a",
+        "ZoneB": "eu-west-1b"
+      }
+    }
+  },
+  "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": {
+          "Fn::Join": [
+            ".",
+            [
+              {
+                "Ref": "VPCOctet"
+              },
+              {
+                "Fn::FindInMap": [
+                  "SubnetConfig",
+                  "VPC",
+                  "CIDR"
+                ]
+              }
+            ]
+          ]
+        },
+        "InstanceTenancy": {
+          "Ref": "VPCTenancy"
+        },
+        "EnableDnsSupport": {
+          "Ref": "EnableVPCDNSSupport"
+        },
+        "EnableDnsHostnames": {
+          "Ref": "EnableDNSHostnameSupport"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "VPC"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          }
+        ]
+      }
+    },
+    "SubnetAdminA": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": {
+          "Fn::Join": [
+            ".",
+            [
+              {
+                "Ref": "VPCOctet"
+              },
+              {
+                "Fn::FindInMap": [
+                  "SubnetConfig",
+                  "AdminA",
+                  "CIDR"
+                ]
+              }
+            ]
+          ]
+        },
+        "AvailabilityZone": {
+          "Fn::FindInMap": [
+            "AvailabilityZones",
+            {
+              "Ref": "AWS::Region"
+            },
+            "ZoneA"
+          ]
+        },
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Admin A"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          }
+        ]
+      }
+    },
+    "SubnetAdminB": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": {
+          "Fn::Join": [
+            ".",
+            [
+              {
+                "Ref": "VPCOctet"
+              },
+              {
+                "Fn::FindInMap": [
+                  "SubnetConfig",
+                  "AdminB",
+                  "CIDR"
+                ]
+              }
+            ]
+          ]
+        },
+        "AvailabilityZone": {
+          "Fn::FindInMap": [
+            "AvailabilityZones",
+            {
+              "Ref": "AWS::Region"
+            },
+            "ZoneB"
+          ]
+        },
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Admin B"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          }
+        ]
+      }
+    },
+    "SubnetWebA": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": {
+          "Fn::Join": [
+            ".",
+            [
+              {
+                "Ref": "VPCOctet"
+              },
+              {
+                "Fn::FindInMap": [
+                  "SubnetConfig",
+                  "WebA",
+                  "CIDR"
+                ]
+              }
+            ]
+          ]
+        },
+        "AvailabilityZone": {
+          "Fn::FindInMap": [
+            "AvailabilityZones",
+            {
+              "Ref": "AWS::Region"
+            },
+            "ZoneA"
+          ]
+        },
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Web A"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          }
+        ]
+      }
+    },
+    "SubnetWebB": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": {
+          "Fn::Join": [
+            ".",
+            [
+              {
+                "Ref": "VPCOctet"
+              },
+              {
+                "Fn::FindInMap": [
+                  "SubnetConfig",
+                  "WebB",
+                  "CIDR"
+                ]
+              }
+            ]
+          ]
+        },
+        "AvailabilityZone": {
+          "Fn::FindInMap": [
+            "AvailabilityZones",
+            {
+              "Ref": "AWS::Region"
+            },
+            "ZoneB"
+          ]
+        },
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Web B"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          }
+        ]
+      }
+    },
+    "SubnetSecurityA": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": {
+          "Fn::Join": [
+            ".",
+            [
+              {
+                "Ref": "VPCOctet"
+              },
+              {
+                "Fn::FindInMap": [
+                  "SubnetConfig",
+                  "SecurityA",
+                  "CIDR"
+                ]
+              }
+            ]
+          ]
+        },
+        "AvailabilityZone": {
+          "Fn::FindInMap": [
+            "AvailabilityZones",
+            {
+              "Ref": "AWS::Region"
+            },
+            "ZoneA"
+          ]
+        },
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Security A"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          }
+        ]
+      }
+    },
+    "SubnetSecurityB": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": {
+          "Fn::Join": [
+            ".",
+            [
+              {
+                "Ref": "VPCOctet"
+              },
+              {
+                "Fn::FindInMap": [
+                  "SubnetConfig",
+                  "SecurityB",
+                  "CIDR"
+                ]
+              }
+            ]
+          ]
+        },
+        "AvailabilityZone": {
+          "Fn::FindInMap": [
+            "AvailabilityZones",
+            {
+              "Ref": "AWS::Region"
+            },
+            "ZoneB"
+          ]
+        },
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Security B"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          }
+        ]
+      }
+    },
+    "SubnetDataA": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": {
+          "Fn::Join": [
+            ".",
+            [
+              {
+                "Ref": "VPCOctet"
+              },
+              {
+                "Fn::FindInMap": [
+                  "SubnetConfig",
+                  "DataA",
+                  "CIDR"
+                ]
+              }
+            ]
+          ]
+        },
+        "AvailabilityZone": {
+          "Fn::FindInMap": [
+            "AvailabilityZones",
+            {
+              "Ref": "AWS::Region"
+            },
+            "ZoneA"
+          ]
+        },
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Data A"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          }
+        ]
+      }
+    },
+    "SubnetDataB": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": {
+          "Fn::Join": [
+            ".",
+            [
+              {
+                "Ref": "VPCOctet"
+              },
+              {
+                "Fn::FindInMap": [
+                  "SubnetConfig",
+                  "DataB",
+                  "CIDR"
+                ]
+              }
+            ]
+          ]
+        },
+        "AvailabilityZone": {
+          "Fn::FindInMap": [
+            "AvailabilityZones",
+            {
+              "Ref": "AWS::Region"
+            },
+            "ZoneB"
+          ]
+        },
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Data B"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          }
+        ]
+      }
+    },
+    "VPCIGW": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Condition": "AttachIGWtoVPCCondition",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "IGW"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          }
+        ]
+      }
+    },
+    "AttachIGWtoVPC": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Condition": "AttachIGWtoVPCCondition",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "VPCIGW"
+        }
+      }
+    },
+    "VPCDHCP": {
+      "Type": "AWS::EC2::DHCPOptions",
+      "Properties": {
+        "DomainName": {
+          "Ref": "DomainName"
+        },
+        "DomainNameServers": {
+          "Ref": "DNSServers"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "DHCP Option Set"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          }
+        ]
+      }
+    },
+    "AssocVPCDHCPtoVPC": {
+      "Type": "AWS::EC2::VPCDHCPOptionsAssociation",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "DhcpOptionsId": {
+          "Ref": "VPCDHCP"
+        }
+      }
+    },
+    "VPNGatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Condition": "AttachVGWtoVPCCondition",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "VpnGatewayId": {
+          "Ref": "VGWId"
+        }
+      }
+    },
+    "DataACL": {
+      "Type": "AWS::EC2::NetworkAcl",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Data"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          }
+        ]
+      }
+    },
+    "DefaultACL": {
+      "Type": "AWS::EC2::NetworkAcl",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Default"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          }
+        ]
+      }
+    },
+    "GatewayACL": {
+      "Type": "AWS::EC2::NetworkAcl",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Gateway"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          }
+        ]
+      }
+    },
+    "SecurityACL": {
+      "Type": "AWS::EC2::NetworkAcl",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          }
+        ]
+      }
+    },
+    "AdminACL": {
+      "Type": "AWS::EC2::NetworkAcl",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Admin"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          }
+        ]
+      }
+    },
+    "WebACL": {
+      "Type": "AWS::EC2::NetworkAcl",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Web"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          }
+        ]
+      }
+    },
+    "GatewayRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Gateway"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          }
+        ]
+      }
+    },
+    "AdminRouteTable":{
+      "Type":"AWS::EC2::RouteTable",
+      "Properties":{
+        "VpcId":{
+          "Ref":"VPC"
+        },
+        "Tags":[
+          {
+            "Key":"Name",
+            "Value":"Admin"
+          },
+          {
+            "Key":"Environment",
+            "Value":{
+              "Ref":"Environment"
+            }
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          }
+        ]
+      }
+    },
+    "WebRouteTable":{
+      "Type":"AWS::EC2::RouteTable",
+      "Properties":{
+        "VpcId":{
+          "Ref":"VPC"
+        },
+        "Tags":[
+          {
+            "Key":"Name",
+            "Value":"Web"
+          },
+          {
+            "Key":"Environment",
+            "Value":{
+              "Ref":"Environment"
+            }
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          }
+        ]
+      }
+    },
+    "SecurityRouteTable":{
+      "Type":"AWS::EC2::RouteTable",
+      "Properties":{
+        "VpcId":{
+          "Ref":"VPC"
+        },
+        "Tags":[
+          {
+            "Key":"Name",
+            "Value":"Security"
+          },
+          {
+            "Key":"Environment",
+            "Value":{
+              "Ref":"Environment"
+            }
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          }
+        ]
+      }
+    },
+    "DataRouteTable":{
+      "Type":"AWS::EC2::RouteTable",
+      "Properties":{
+        "VpcId":{
+          "Ref":"VPC"
+        },
+        "Tags":[
+          {
+            "Key":"Name",
+            "Value":"Data"
+          },
+          {
+            "Key":"Environment",
+            "Value":{
+              "Ref":"Environment"
+            }
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          }
+        ]
+      }
+    },
+    "SubnetAdminARouteTableAdmin" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "DependsOn" : "AdminRouteTable",
+      "Properties" : {
+        "SubnetId" : { "Ref" : "SubnetAdminA" },
+        "RouteTableId" : { "Ref" : "AdminRouteTable" }
+      }
+    },
+    "SubnetAdminBRouteTableAdmin" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "DependsOn" : "AdminRouteTable",
+      "Properties" : {
+        "SubnetId" : { "Ref" : "SubnetAdminB" },
+        "RouteTableId" : { "Ref" : "AdminRouteTable" }
+      }
+    },
+    "SubnetDataARouteTableData" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "DependsOn" : "DataRouteTable",
+      "Properties" : {
+        "SubnetId" : { "Ref" : "SubnetDataA" },
+        "RouteTableId" : { "Ref" : "DataRouteTable" }
+      }
+    },
+    "SubnetDataBRouteTableData" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "DependsOn" : "DataRouteTable",
+      "Properties" : {
+        "SubnetId" : { "Ref" : "SubnetDataB" },
+        "RouteTableId" : { "Ref" : "DataRouteTable" }
+      }
+    },
+    "SubnetWebARouteTableData" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "DependsOn" : "WebRouteTable",
+      "Properties" : {
+        "SubnetId" : { "Ref" : "SubnetWebA" },
+        "RouteTableId" : { "Ref" : "WebRouteTable" }
+      }
+    },
+    "SubnetWebBRouteTableData" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "DependsOn" : "WebRouteTable",
+      "Properties" : {
+        "SubnetId" : { "Ref" : "SubnetWebB" },
+        "RouteTableId" : { "Ref" : "WebRouteTable" }
+      }
+    },
+    "SubnetSecurityARouteTableData" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "DependsOn" : "SecurityRouteTable",
+      "Properties" : {
+        "SubnetId" : { "Ref" : "SubnetSecurityA" },
+        "RouteTableId" : { "Ref" : "SecurityRouteTable" }
+      }
+    },
+    "SubnetSecurityBRouteTableData" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "DependsOn" : "SecurityRouteTable",
+      "Properties" : {
+        "SubnetId" : { "Ref" : "SubnetSecurityB" },
+        "RouteTableId" : { "Ref" : "SecurityRouteTable" }
+      }
+    },
+    "AllowDataACLTCPegresstoVPC": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": {
+          "Fn::Join": [
+            ".",
+            [
+              {
+                "Ref": "VPCOctet"
+              },
+              {
+                "Fn::FindInMap": [
+                  "SubnetConfig",
+                  "VPC",
+                  "CIDR"
+                ]
+              }
+            ]
+          ]
+        },
+        "Egress": true,
+        "Protocol": "6",
+        "RuleAction": "allow",
+        "RuleNumber": "100",
+        "PortRange": {
+          "From": "1",
+          "To": "65535"
+        },
+        "NetworkAclId": {
+          "Ref": "DataACL"
+        }
+      }
+    },
+    "AllowDataACLUDPegresstoVPC": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": {
+          "Fn::Join": [
+            ".",
+            [
+              {
+                "Ref": "VPCOctet"
+              },
+              {
+                "Fn::FindInMap": [
+                  "SubnetConfig",
+                  "VPC",
+                  "CIDR"
+                ]
+              }
+            ]
+          ]
+        },
+        "Egress": true,
+        "Protocol": "17",
+        "RuleAction": "allow",
+        "RuleNumber": "110",
+        "PortRange": {
+          "From": "1",
+          "To": "65535"
+        },
+        "NetworkAclId": {
+          "Ref": "DataACL"
+        }
+      }
+    },
+    "AllowAdminACLingressHighPorts": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": "0.0.0.0/0",
+        "Protocol": "6",
+        "RuleAction": "allow",
+        "RuleNumber": "100",
+        "PortRange": {
+          "From": "1024",
+          "To": "65535"
+        },
+        "NetworkAclId": {
+          "Ref": "AdminACL"
+        }
+      }
+    },
+    "AllowAdminACLingressTrend": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": "0.0.0.0/0",
+        "Protocol": "6",
+        "RuleAction": "allow",
+        "RuleNumber": "110",
+        "PortRange": {
+          "From": "4118",
+          "To": "4122"
+        },
+        "NetworkAclId": {
+          "Ref": "AdminACL"
+        }
+      }
+    },
+    "AllowAdminACLegresstoWeb": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": "0.0.0.0/0",
+        "Egress": true,
+        "Protocol": "6",
+        "RuleAction": "allow",
+        "RuleNumber": "100",
+        "PortRange": {
+          "From": "80",
+          "To": "80"
+        },
+        "NetworkAclId": {
+          "Ref": "AdminACL"
+        }
+      }
+    },
+    "AllowAdminACLegresstoHttps": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": "0.0.0.0/0",
+        "Egress": true,
+        "Protocol": "6",
+        "RuleAction": "allow",
+        "RuleNumber": "110",
+        "PortRange": {
+          "From": "443",
+          "To": "443"
+        },
+        "NetworkAclId": {
+          "Ref": "AdminACL"
+        }
+      }
+    },
+    "AllowAdminACLegresstoRDP": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": "0.0.0.0/0",
+        "Egress": true,
+        "Protocol": "6",
+        "RuleAction": "allow",
+        "RuleNumber": "120",
+        "PortRange": {
+          "From": "3389",
+          "To": "3389"
+        },
+        "NetworkAclId": {
+          "Ref": "AdminACL"
+        }
+      }
+    },
+    "AllowAdminACLegresstoSSH": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": "0.0.0.0/0",
+        "Egress": true,
+        "Protocol": "6",
+        "RuleAction": "allow",
+        "RuleNumber": "130",
+        "PortRange": {
+          "From": "22",
+          "To": "22"
+        },
+        "NetworkAclId": {
+          "Ref": "AdminACL"
+        }
+      }
+    },
+    "AllowAdminACLegresstoHighPorts": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": "0.0.0.0/0",
+        "Egress": true,
+        "Protocol": "6",
+        "RuleAction": "allow",
+        "RuleNumber": "140",
+        "PortRange": {
+          "From": "1024",
+          "To": "65535"
+        },
+        "NetworkAclId": {
+          "Ref": "AdminACL"
+        }
+      }
+    },
+    "AllowAdminACLegresstoTrend": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": "0.0.0.0/0",
+        "Egress": true,
+        "Protocol": "6",
+        "RuleAction": "allow",
+        "RuleNumber": "150",
+        "PortRange": {
+          "From": "4118",
+          "To": "4122"
+        },
+        "NetworkAclId": {
+          "Ref": "AdminACL"
+        }
+      }
+    },
+    "AllowDataACLegresstoWeb": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": "0.0.0.0/0",
+        "Egress": true,
+        "Protocol": "6",
+        "RuleAction": "allow",
+        "RuleNumber": "160",
+        "PortRange": {
+          "From": "80",
+          "To": "80"
+        },
+        "NetworkAclId": {
+          "Ref": "DataACL"
+        }
+      }
+    },
+    "AllowDataACLegresstoSecureWeb": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": "0.0.0.0/0",
+        "Egress": true,
+        "Protocol": "6",
+        "RuleAction": "allow",
+        "RuleNumber": "170",
+        "PortRange": {
+          "From": "443",
+          "To": "443"
+        },
+        "NetworkAclId": {
+          "Ref": "DataACL"
+        }
+      }
+    },
+    "AllowDataACLTCPingressFromVPC": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": {
+          "Fn::Join": [
+            ".",
+            [
+              {
+                "Ref": "VPCOctet"
+              },
+              {
+                "Fn::FindInMap": [
+                  "SubnetConfig",
+                  "VPC",
+                  "CIDR"
+                ]
+              }
+            ]
+          ]
+        },
+        "Protocol": "6",
+        "RuleAction": "allow",
+        "RuleNumber": "100",
+        "PortRange": {
+          "From": "1",
+          "To": "65535"
+        },
+        "NetworkAclId": {
+          "Ref": "DataACL"
+        }
+      }
+    },
+    "AllowDataACLUDPingressFromVPC": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": {
+          "Fn::Join": [
+            ".",
+            [
+              {
+                "Ref": "VPCOctet"
+              },
+              {
+                "Fn::FindInMap": [
+                  "SubnetConfig",
+                  "VPC",
+                  "CIDR"
+                ]
+              }
+            ]
+          ]
+        },
+        "Protocol": "17",
+        "RuleAction": "allow",
+        "RuleNumber": "110",
+        "PortRange": {
+          "From": "1",
+          "To": "65535"
+        },
+        "NetworkAclId": {
+          "Ref": "DataACL"
+        }
+      }
+    },
+    "AllowDataACLingressReturnFromWeb": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": "0.0.0.0/0",
+        "Protocol": "6",
+        "RuleAction": "allow",
+        "RuleNumber": "160",
+        "PortRange": {
+          "From": "1024",
+          "To": "65535"
+        },
+        "NetworkAclId": {
+          "Ref": "DataACL"
+        }
+      }
+    },
+    "AllowSecurityACLTCPegresstoVPC": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": {
+          "Fn::Join": [
+            ".",
+            [
+              {
+                "Ref": "VPCOctet"
+              },
+              {
+                "Fn::FindInMap": [
+                  "SubnetConfig",
+                  "VPC",
+                  "CIDR"
+                ]
+              }
+            ]
+          ]
+        },
+        "Egress": true,
+        "Protocol": "6",
+        "RuleAction": "allow",
+        "RuleNumber": "100",
+        "PortRange": {
+          "From": "1",
+          "To": "65535"
+        },
+        "NetworkAclId": {
+          "Ref": "SecurityACL"
+        }
+      }
+    },
+    "AllowSecurityACLUDPegresstoVPC": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": {
+          "Fn::Join": [
+            ".",
+            [
+              {
+                "Ref": "VPCOctet"
+              },
+              {
+                "Fn::FindInMap": [
+                  "SubnetConfig",
+                  "VPC",
+                  "CIDR"
+                ]
+              }
+            ]
+          ]
+        },
+        "Egress": true,
+        "Protocol": "17",
+        "RuleAction": "allow",
+        "RuleNumber": "110",
+        "PortRange": {
+          "From": "1",
+          "To": "65535"
+        },
+        "NetworkAclId": {
+          "Ref": "SecurityACL"
+        }
+      }
+    },
+    "AllowSecurityACLegresstoWeb": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": "0.0.0.0/0",
+        "Egress": true,
+        "Protocol": "6",
+        "RuleAction": "allow",
+        "RuleNumber": "160",
+        "PortRange": {
+          "From": "80",
+          "To": "80"
+        },
+        "NetworkAclId": {
+          "Ref": "SecurityACL"
+        }
+      }
+    },
+    "AllowSecurityACLegresstoSecureWeb": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": "0.0.0.0/0",
+        "Egress": true,
+        "Protocol": "6",
+        "RuleAction": "allow",
+        "RuleNumber": "170",
+        "PortRange": {
+          "From": "443",
+          "To": "443"
+        },
+        "NetworkAclId": {
+          "Ref": "SecurityACL"
+        }
+      }
+    },
+    "AllowSecurityACLTCPingressFromVPC": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": {
+          "Fn::Join": [
+            ".",
+            [
+              {
+                "Ref": "VPCOctet"
+              },
+              {
+                "Fn::FindInMap": [
+                  "SubnetConfig",
+                  "VPC",
+                  "CIDR"
+                ]
+              }
+            ]
+          ]
+        },
+        "Protocol": "6",
+        "RuleAction": "allow",
+        "RuleNumber": "100",
+        "PortRange": {
+          "From": "1",
+          "To": "65535"
+        },
+        "NetworkAclId": {
+          "Ref": "SecurityACL"
+        }
+      }
+    },
+    "AllowSecurityACLUDPingressFromVPC": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": {
+          "Fn::Join": [
+            ".",
+            [
+              {
+                "Ref": "VPCOctet"
+              },
+              {
+                "Fn::FindInMap": [
+                  "SubnetConfig",
+                  "VPC",
+                  "CIDR"
+                ]
+              }
+            ]
+          ]
+        },
+        "Protocol": "17",
+        "RuleAction": "allow",
+        "RuleNumber": "110",
+        "PortRange": {
+          "From": "1",
+          "To": "65535"
+        },
+        "NetworkAclId": {
+          "Ref": "SecurityACL"
+        }
+      }
+    },
+    "AllowSecurityACLingressReturnFromWeb": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": "0.0.0.0/0",
+        "Protocol": "6",
+        "RuleAction": "allow",
+        "RuleNumber": "160",
+        "PortRange": {
+          "From": "1024",
+          "To": "65535"
+        },
+        "NetworkAclId": {
+          "Ref": "SecurityACL"
+        }
+      }
+    },
+    "DenyDefaultACLegressAll": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": "0.0.0.0/0",
+        "Egress": true,
+        "Protocol": "-1",
+        "RuleAction": "deny",
+        "RuleNumber": "100",
+        "NetworkAclId": {
+          "Ref": "DefaultACL"
+        }
+      }
+    },
+    "AllowWebACLTCPegresstoVPC": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": {
+          "Fn::Join": [
+            ".",
+            [
+              {
+                "Ref": "VPCOctet"
+              },
+              {
+                "Fn::FindInMap": [
+                  "SubnetConfig",
+                  "VPC",
+                  "CIDR"
+                ]
+              }
+            ]
+          ]
+        },
+        "Egress": "true",
+        "Protocol": "6",
+        "RuleAction": "allow",
+        "RuleNumber": "100",
+        "PortRange": {
+          "From": "1",
+          "To": "65535"
+        },
+        "NetworkAclId": {
+          "Ref": "WebACL"
+        }
+      }
+    },
+    "AllowWebACLUDPegresstoVPC": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": {
+          "Fn::Join": [
+            ".",
+            [
+              {
+                "Ref": "VPCOctet"
+              },
+              {
+                "Fn::FindInMap": [
+                  "SubnetConfig",
+                  "VPC",
+                  "CIDR"
+                ]
+              }
+            ]
+          ]
+        },
+        "Egress": "true",
+        "Protocol": "17",
+        "RuleAction": "allow",
+        "RuleNumber": "110",
+        "PortRange": {
+          "From": "1",
+          "To": "65535"
+        },
+        "NetworkAclId": {
+          "Ref": "WebACL"
+        }
+      }
+    },
+    "AllowWebACLegresstoWeb": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": "0.0.0.0/0",
+        "Egress": "true",
+        "Protocol": "6",
+        "RuleAction": "allow",
+        "RuleNumber": "160",
+        "PortRange": {
+          "From": "80",
+          "To": "80"
+        },
+        "NetworkAclId": {
+          "Ref": "WebACL"
+        }
+      }
+    },
+    "AllowWebACLegresstoSecureWeb": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": "0.0.0.0/0",
+        "Egress": "true",
+        "Protocol": "6",
+        "RuleAction": "allow",
+        "RuleNumber": "170",
+        "PortRange": {
+          "From": "443",
+          "To": "443"
+        },
+        "NetworkAclId": {
+          "Ref": "WebACL"
+        }
+      }
+    },
+    "AllowWebACLegressReturnToWeb": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": "0.0.0.0/0",
+        "Egress": "true",
+        "Protocol": "6",
+        "RuleAction": "allow",
+        "RuleNumber": "180",
+        "PortRange": {
+          "From": "1024",
+          "To": "65535"
+        },
+        "NetworkAclId": {
+          "Ref": "WebACL"
+        }
+      }
+    },
+    "AllowWebACLTCPingressfromVPC": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": {
+          "Fn::Join": [
+            ".",
+            [
+              {
+                "Ref": "VPCOctet"
+              },
+              {
+                "Fn::FindInMap": [
+                  "SubnetConfig",
+                  "VPC",
+                  "CIDR"
+                ]
+              }
+            ]
+          ]
+        },
+        "Protocol": "6",
+        "Egress": "false",
+        "RuleAction": "allow",
+        "RuleNumber": "100",
+        "PortRange": {
+          "From": "1",
+          "To": "65535"
+        },
+        "NetworkAclId": {
+          "Ref": "WebACL"
+        }
+      }
+    },
+    "AllowWebACLUDPingressfromVPC": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": {
+          "Fn::Join": [
+            ".",
+            [
+              {
+                "Ref": "VPCOctet"
+              },
+              {
+                "Fn::FindInMap": [
+                  "SubnetConfig",
+                  "VPC",
+                  "CIDR"
+                ]
+              }
+            ]
+          ]
+        },
+        "Protocol": "17",
+        "Egress": "false",
+        "RuleAction": "allow",
+        "RuleNumber": "110",
+        "PortRange": {
+          "From": "1",
+          "To": "65535"
+        },
+        "NetworkAclId": {
+          "Ref": "WebACL"
+        }
+      }
+    },
+    "AllowWebACLingressReturnFromWeb": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": "0.0.0.0/0",
+        "Protocol": "6",
+        "Egress": "false",
+        "RuleAction": "allow",
+        "RuleNumber": "160",
+        "PortRange": {
+          "From": "1024",
+          "To": "65535"
+        },
+        "NetworkAclId": {
+          "Ref": "WebACL"
+        }
+      }
+    },
+    "AllowWebACLingressFromWeb": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": "0.0.0.0/0",
+        "Protocol": "6",
+        "Egress": "false",
+        "RuleAction": "allow",
+        "RuleNumber": "170",
+        "PortRange": {
+          "From": "80",
+          "To": "80"
+        },
+        "NetworkAclId": {
+          "Ref": "WebACL"
+        }
+      }
+    },
+    "AllowWebACLingressFromSecureWeb": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": "0.0.0.0/0",
+        "Protocol": "6",
+        "Egress": "false",
+        "RuleAction": "allow",
+        "RuleNumber": "180",
+        "PortRange": {
+          "From": "443",
+          "To": "443"
+        },
+        "NetworkAclId": {
+          "Ref": "WebACL"
+        }
+      }
+    },
+    "AssocAdminAtoAdminACL": {
+      "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+      "Properties": {
+        "NetworkAclId": {
+          "Ref": "AdminACL"
+        },
+        "SubnetId": {
+          "Ref": "SubnetAdminA"
+        }
+      }
+    },
+    "AssocAdminBtoAdminACL": {
+      "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+      "Properties": {
+        "NetworkAclId": {
+          "Ref": "AdminACL"
+        },
+        "SubnetId": {
+          "Ref": "SubnetAdminB"
+        }
+      }
+    },
+    "AssocDataAtoDataACL": {
+      "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+      "Properties": {
+        "NetworkAclId": {
+          "Ref": "DataACL"
+        },
+        "SubnetId": {
+          "Ref": "SubnetDataA"
+        }
+      }
+    },
+    "AssocDataBtoDataACL": {
+      "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+      "Properties": {
+        "NetworkAclId": {
+          "Ref": "DataACL"
+        },
+        "SubnetId": {
+          "Ref": "SubnetDataB"
+        }
+      }
+    },
+    "AssocWebAtoWebACL": {
+      "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+      "Properties": {
+        "NetworkAclId": {
+          "Ref": "WebACL"
+        },
+        "SubnetId": {
+          "Ref": "SubnetWebA"
+        }
+      }
+    },
+    "AssocWebBtoWebACL": {
+      "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+      "Properties": {
+        "NetworkAclId": {
+          "Ref": "WebACL"
+        },
+        "SubnetId": {
+          "Ref": "SubnetWebB"
+        }
+      }
+    },
+    "AssocSecurityAtoSecurityACL": {
+      "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+      "Properties": {
+        "NetworkAclId": {
+          "Ref": "SecurityACL"
+        },
+        "SubnetId": {
+          "Ref": "SubnetSecurityA"
+        }
+      }
+    },
+    "AssocSecurityBtoSecurityACL": {
+      "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+      "Properties": {
+        "NetworkAclId": {
+          "Ref": "SecurityACL"
+        },
+        "SubnetId": {
+          "Ref": "SubnetSecurityB"
+        }
+      }
+    },
+    "GatewayRoutetoIGW": {
+      "Type": "AWS::EC2::Route",
+      "Condition": "AttachIGWtoVPCCondition",
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "RouteTableId": {
+          "Ref": "GatewayRouteTable"
+        },
+        "GatewayId": {
+          "Ref": "VPCIGW"
+        }
+      },
+      "DependsOn": "AttachIGWtoVPC"
+    },
+    "AdminRoutetoIGW": {
+      "Type": "AWS::EC2::Route",
+      "Condition": "AttachIGWtoVPCCondition",
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "RouteTableId": {
+          "Ref": "AdminRouteTable"
+        },
+        "GatewayId": {
+          "Ref": "VPCIGW"
+        }
+      },
+      "DependsOn": "AttachIGWtoVPC"
+    },
+    "SecurityRoutetoIGW": {
+      "Type": "AWS::EC2::Route",
+      "Condition": "AttachIGWtoVPCCondition",
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "RouteTableId": {
+          "Ref": "SecurityRouteTable"
+        },
+        "GatewayId": {
+          "Ref": "VPCIGW"
+        }
+      },
+      "DependsOn": "AttachIGWtoVPC"
+    },
+    "VGWRoutePropagationtoGatewayRouteTable": {
+      "Type": "AWS::EC2::VPNGatewayRoutePropagation",
+      "Condition": "AttachVGWtoVPCCondition",
+      "Properties": {
+        "RouteTableIds": [
+          {
+            "Ref": "GatewayRouteTable"
+          }
+        ],
+        "VpnGatewayId": {
+          "Ref": "VGWId"
+        }
+      },
+      "DependsOn": [
+        "GatewayRouteTable",
+        "VPNGatewayAttachment"
+      ]
+    }
+  },
+  "Outputs": {
+    "VPCID": {
+      "Value": {
+        "Ref": "VPC"
+      },
+      "Description": "ID of the VPC deployed"
+    },
+    "VPCCIDR": {
+      "Value": {
+        "Fn::Join": [
+          ".",
+          [
+            {
+              "Ref": "VPCOctet"
+            },
+            {
+              "Fn::FindInMap": [
+                "SubnetConfig",
+                "VPC",
+                "CIDR"
+              ]
+            }
+          ]
+        ]
+      },
+      "Description": "CIDR of the VPC deployed"
+    },
+    "IGWID": {
+      "Condition": "AttachIGWtoVPCCondition",
+      "Value": {
+        "Ref": "VPCIGW"
+      }
+    },
+    "DataSubnetIDs": {
+      "Value": {
+        "Fn::Join": [
+          ",",
+          [
+            {
+              "Ref": "SubnetDataA"
+            },
+            {
+              "Ref": "SubnetDataB"
+            }
+          ]
+        ]
+      },
+      "Description": "Comma separated list of Data subnets"
+    },
+    "SecuritySubnetIDs": {
+      "Value": {
+        "Fn::Join": [
+          ",",
+          [
+            {
+              "Ref": "SubnetSecurityA"
+            },
+            {
+              "Ref": "SubnetSecurityB"
+            }
+          ]
+        ]
+      },
+      "Description": "Comma separated list of Application subnets"
+    },
+    "WebSubnetIDs": {
+      "Value": {
+        "Fn::Join": [
+          ",",
+          [
+            {
+              "Ref": "SubnetWebA"
+            },
+            {
+              "Ref": "SubnetWebB"
+            }
+          ]
+        ]
+      },
+      "Description": "Comma separated list of Web subnets"
+    }
+  }
+}

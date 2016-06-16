@@ -1,0 +1,250 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "AWS CloudFormation template to deploy VPN",
+  "Parameters": {
+    "YourExternalIP": {
+      "Description": "External Interface at your end of the tunnel",
+      "Type": "String",
+      "MinLength": "7",
+      "MaxLength": "15",
+      "AllowedPattern": "[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}"
+    },
+    "isBGP": {
+      "Description": "Is this a BGP tunnel?",
+      "Type": "String",
+      "Default": "true",
+      "AllowedValues": [
+        "true",
+        "false"
+      ]
+    },
+    "BGPASN": {
+      "Description": "The customer gateway's Border Gateway Protocol (BGP) Autonomous System Number (ASN)",
+      "Type": "String",
+      "Default": "65000",
+      "AllowedPattern": "[0-9]{5}"
+    },
+    "Customer": {
+      "Description": "Solution or Customer to allocate costs to",
+      "Type": "String",
+      "MinLength": "3",
+      "MaxLength": "255"
+    },
+    "School": {
+      "Description": "School to allocate costs to",
+      "Type": "String",
+      "MinLength": "3",
+      "MaxLength": "255"
+    },
+    "VGW": {
+      "Description": "VGW ID to attach the VPN to (VPC VGW)",
+      "Type": "String",
+      "Default": "vgw-xxxxxx"
+    }
+  },
+  "Mappings": {
+    "SubnetConfig": {
+      "VPC": {
+        "CIDR": "0.0/16"
+      },
+      "GatewayA": {
+        "CIDR": "0.0/24"
+      },
+      "GatewayB": {
+        "CIDR": "1.0/24"
+      },
+      "WebA": {
+        "CIDR": "2.0/24"
+      },
+      "WebB": {
+        "CIDR": "4.0/24"
+      },
+      "DataA": {
+        "CIDR": "6.0/24"
+      },
+      "DataB": {
+        "CIDR": "7.0/24"
+      },
+      "SecurityA": {
+        "CIDR": "254.0/25"
+      },
+      "SecurityB": {
+        "CIDR": "254.128/25"
+      },
+      "AdminA": {
+        "CIDR": "255.0/25"
+      },
+      "AdminB": {
+        "CIDR": "255.128/25"
+      }
+    },
+    "AvailabilityZones": {
+      "SYD-AZA": {
+        "Zone": "ap-southeast-2a"
+      },
+      "SYD-AZB": {
+        "Zone": "ap-southeast-2b"
+      },
+      "IRE-AZA": {
+        "Zone": "eu-west-1a"
+      },
+      "IRE-AZB": {
+        "Zone": "eu-west-1b"
+      }
+    }
+  },
+  "Conditions": {
+    "StaticVPN": {
+      "Fn::Equals": [
+        {
+          "Ref": "isBGP"
+        },
+        "false"
+      ]
+    },
+    "BGPVPN": {
+      "Fn::Equals": [
+        {
+          "Ref": "isBGP"
+        },
+        "true"
+      ]
+    }
+  },
+  "Resources": {
+    "CustomerGateway": {
+      "Type": "AWS::EC2::CustomerGateway",
+      "Properties": {
+        "Type": "ipsec.1",
+        "BgpAsn": {
+          "Ref": "BGPASN"
+        },
+        "IpAddress": {
+          "Ref": "YourExternalIP"
+        },
+        "Tags": [
+          {
+            "Key": "VPN",
+            "Value": {
+              "Fn::Join": [
+                "",
+                [
+                  "Gateway to ",
+                  {
+                    "Ref": "YourExternalIP"
+                  }
+                ]
+              ]
+            }
+          },
+          {
+            "Key": "Name",
+            "Value": "CustomerGateway"
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          },
+          {
+            "Key": "School",
+            "Value": {
+              "Ref": "School"
+            }
+          }
+        ]
+      }
+    },
+    "VPNConnectionStatic": {
+      "Type": "AWS::EC2::VPNConnection",
+      "Condition": "StaticVPN",
+      "Properties": {
+        "Type": "ipsec.1",
+        "StaticRoutesOnly": "true",
+        "CustomerGatewayId": {
+          "Ref": "CustomerGateway"
+        },
+        "VpnGatewayId": {
+          "Ref": "VGW"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "VirtualPrivateNetwork"
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          },
+          {
+            "Key": "School",
+            "Value": {
+              "Ref": "School"
+            }
+          }
+        ]
+      }
+    },
+    "VPNConnectionBGP": {
+      "Type": "AWS::EC2::VPNConnection",
+      "Condition": "BGPVPN",
+      "Properties": {
+        "Type": "ipsec.1",
+        "StaticRoutesOnly": "false",
+        "CustomerGatewayId": {
+          "Ref": "CustomerGateway"
+        },
+        "VpnGatewayId": {
+          "Ref": "VGW"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "VirtualPrivateNetwork"
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          },
+          {
+            "Key": "School",
+            "Value": {
+              "Ref": "School"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "CustomerGatewayID": {
+      "Value": {
+        "Ref": "CustomerGateway"
+      },
+      "Description": "Id of the Customer Gateway created"
+    },
+    "VirtualGatewayID": {
+      "Value": {
+        "Ref": "VGW"
+      },
+      "Description": "Id of the Virtual Gateway (VGW)"
+    },
+    "StaticVPNID": {
+      "Condition": "StaticVPN",
+      "Value": {
+        "Ref": "VPNConnectionStatic"
+      }
+    },
+    "BGPVPNID": {
+      "Condition": "BGPVPN",
+      "Value": {
+        "Ref": "VPNConnectionBGP"
+      }
+    }
+  }
+}

@@ -1,0 +1,470 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "AWS CloudFormation template to deploy EC2 Instance customized for a TrendManager Installation",
+  "Parameters": {
+    "SecurityGroup": {
+      "Description": "The option to chose the Security Group that this instance will be a part of ",
+      "Type": "List<AWS::EC2::SecurityGroup::Id>"
+    },
+    "LicenseKey": {
+      "Description": "Trend License Key",
+      "Type": "String"
+    },
+    "SubnetId": {
+      "Description": "The SubnetId",
+      "Type": "String"
+    },
+    "KeyName": {
+      "Description": "Name of an existing EC2 KeyPair",
+      "Type": "AWS::EC2::KeyPair::KeyName"
+    },
+    "CredentialsScreenAdministratorUsername": {
+      "Description": "Username for master administrator",
+      "Type": "String"
+    },
+    "CredentialsScreenAdministratorPassword": {
+      "Description": "Password for master administrator",
+      "Type": "String"
+    },
+    "DatabaseScreenDatabaseType": {
+      "Description": "Type of Database to install",
+      "Type": "String",
+      "Default": "Microsoft SQL Server",
+      "AllowedValues": [
+        "Embedded",
+        "Microsoft SQL Server",
+        "Oracle"
+      ]
+    },
+    "DatabaseScreenDatabaseName": {
+      "Description": "Name of the Database",
+      "Type": "String"
+    },
+    "DatabaseScreenHostname": {
+      "Description": "Database Hostname",
+      "Type": "String"
+    },
+    "DatabaseScreenUsername": {
+      "Description": "The username for the DataBase Screen",
+      "Type": "String"
+    },
+    "DatabaseScreenPassword": {
+      "Description": "The password for the DataBase Screen",
+      "Type": "String"
+    },
+    "DatabaseScreenSQLServerInstance": {
+      "Description": "The instance of the SQL Database",
+      "Type": "String"
+    },
+    "DatabaseScreenSQLServerDomain": {
+      "Description": "Option to join the SQL Server to a domain",
+      "Type": "String"
+    },
+    "DatabaseScreenSQLServerUseDefaultCollation": {
+      "Description": "Optional",
+      "Type": "String",
+      "Default": "False",
+      "AllowedValues": [
+        "True",
+        "False"
+      ]
+    },
+    "AddressAndPortsScreenManagerPort": {
+      "Description": "Port used for management communications",
+      "Type": "String",
+      "Default": "4119",
+      "AllowedValues": [
+        "4119"
+      ]
+    },
+    "AddressAndPortsScreenHeartbeatPort": {
+      "Description": "Port used for applications and agent connecitons",
+      "Type": "String",
+      "Default": "4120",
+      "AllowedValues": [
+        "4120"
+      ]
+    },
+    "AddressAndPortsScreenNewNode": {
+      "Description": "Relevant between a new and an old installation",
+      "Type": "String",
+      "Default": "False",
+      "AllowedValues": [
+        "True",
+        "False"
+      ]
+    },
+    "CredentialsScreenUseStrongPasswords": {
+      "Description": "The use of strong passwords is required",
+      "Type": "String",
+      "Default": "False",
+      "AllowedValues": [
+        "True",
+        "False"
+      ]
+    },
+    "SecurityUpdateScreenUpdateComponents": {
+      "Description": "Indicitive of whether or not to recieve automatic updates",
+      "Type": "String",
+      "Default": "True",
+      "AllowedValues": [
+        "True",
+        "False"
+      ]
+    },
+    "SecurityUpdateScreenUpdateSoftware": {
+      "Description": "Check for new package updates",
+      "Type": "String",
+      "Default": "True",
+      "AllowedValues": [
+        "True",
+        "False"
+      ]
+    },
+    "SmartProtectionNetworkScreenEnableFeedback": {
+      "Description": "Optional to provide installation feedback.",
+      "Type": "String",
+      "Default": "False",
+      "AllowedValues": [
+        "True",
+        "False"
+      ]
+    },
+    "SmartProtectionNetworkScreenIndustryType": {
+      "Description": "Optional to provide installation feedback.",
+      "Type": "String"
+    },
+    "InstanceType": {
+      "Description": "Amazon EC2 instance type",
+      "Type": "String",
+      "Default": "m1.medium",
+      "AllowedValues": [
+        "t1.micro",
+        "t2.micro",
+        "t2.small",
+        "t2.medium",
+        "t2.large",
+        "m1.medium",
+        "m3.medium",
+        "m4.large",
+        "m4.xlarge",
+        "m4.2xlarge",
+        "m4.4xlarge",
+        "m4.10xlarge",
+        "m3.large",
+        "m3.xlarge",
+        "m3.2xlarge",
+        "c1.medium",
+        "c1.xlarge",
+        "c3.large",
+        "c3.xlarge",
+        "c3.2xlarge",
+        "c3.4xlarge",
+        "c3.8xlarge",
+        "c4.large",
+        "c4.xlarge",
+        "c4.2xlarge",
+        "c4.4xlarge",
+        "c4.8xlarge",
+        "g2.2xlarge",
+        "r3.large",
+        "r3.xlarge",
+        "r3.2xlarge",
+        "r3.4xlarge",
+        "r3.8xlarge",
+        "i2.xlarge",
+        "i2.2xlarge",
+        "i2.4xlarge",
+        "i2.8xlarge",
+        "d2.xlarge",
+        "d2.2xlarge",
+        "d2.4xlarge",
+        "d2.8xlarge",
+        "hi1.4xlarge",
+        "hs1.8xlarge",
+        "cr1.8xlarge",
+        "cc2.8xlarge",
+        "cg1.4xlarge"
+      ],
+      "ConstraintDescription": "must be a valid EC2 instance type."
+    },
+    "SourceCidrForRDP": {
+      "Description": "IP Cidr from which you are likely to RDP into the instances. You can add rules later by modifying the created security groups e.g. 54.32.98.160/32",
+      "Type": "String",
+      "MinLength": "9",
+      "MaxLength": "18"
+      }
+  },
+  "Mappings": {
+    "AWSRegion2AMI": {
+      "us-east-1": {
+        "Windows2008r2": "ami-31620c54",
+        "Windows2012r2": "ami-c9cea0ac"
+      },
+      "us-west-2": {
+        "Windows2008r2": "ami-d53c21e5",
+        "Windows2012r2": "ami-dfccd1ef"
+      },
+      "us-west-1": {
+        "Windows2008r2": "ami-2b2dd76f",
+        "Windows2012r2": "ami-890af0cd"
+      },
+      "eu-west-1": {
+        "Windows2008r2": "ami-872f0ff0",
+        "Windows2012r2": "ami-abe9c9dc"
+      },
+      "eu-central-1": {
+        "Windows2008r2": "ami-98656585",
+        "Windows2012r2": "ami-3e737323"
+      },
+      "ap-northeast-1": {
+        "Windows2008r2": "ami-2c41ca2c",
+        "Windows2012r2": "ami-4623a846"
+      },
+      "ap-southeast-1": {
+        "Windows2008r2": "ami-80c2c8d2",
+        "Windows2012r2": "ami-58efe50a"
+      },
+      "ap-southeast-2": {
+        "Windows2008r2": "ami-ed2b64d7",
+        "Windows2012r2": "ami-f53679cf"
+      },
+      "sa-east-1": {
+        "Windows2008r2": "ami-53db4e4e",
+        "Windows2012r2": "ami-3bce5b26"
+      },
+      "cn-north-1": {
+        "Windows2008r2": "ami-e2811ddb",
+        "Windows2012r2": "ami-f0811dc9"
+      }
+    }
+  },
+  "Resources": {
+    "TrendManager": {
+      "Type": "AWS::EC2::Instance",
+      "Metadata": {
+        "AWS::CloudFormation::Init": {
+          "config": {
+            "files": {
+              "c:\\cfn\\cfn-hup.conf": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "[main]\n",
+                      "stack=",
+                      {
+                        "Ref": "AWS::StackId"
+                      },
+                      "\n",
+                      "region=",
+                      {
+                        "Ref": "AWS::Region"
+                      },
+                      "\n"                  ]
+                  ]
+                }
+              },
+              "c:\\cfn\\hooks.d\\cfn-auto-reloader.conf": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "[cfn-auto-reloader-hook]\n",
+                      "triggers=post.update\n",
+                      "path=Resources.TrendManager.Metadata.AWS::CloudFormation::Init\n",
+                      "action=cfn-init.exe -v -s ",
+                      {
+                        "Ref": "AWS::StackId"
+                      },
+                      " -r TrendManager",
+                      " --region ",
+                      {
+                        "Ref": "AWS::Region"
+                      },
+                      "\n"
+                    ]
+                  ]
+                }
+              },
+              "c:\\Trend\\Parameters.parameters": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "LicenseScreen.License=",
+                      {
+                        "Ref": "LicenseKey"
+                      },
+                      "\n",
+                      "CredentialsScreen.Administrator.Username=",
+                      {
+                        "Ref": "CredentialsScreenAdministratorUsername"
+                      },
+                      "\n",
+                      "DatabaseScreen.DatabaseType=",
+                      {
+                        "Ref": "DatabaseScreenDatabaseType"
+                      },
+                      "\n",
+                      "DatabaseScreen.Hostname=",
+                      {
+                        "Ref": "DatabaseScreenHostname"
+                      },
+                      "\n",
+                      "DatabaseScreen.DatabaseName=",
+                      {
+                        "Ref": "DatabaseScreenDatabaseName"
+                      },
+                      "\n",
+                      "DatabaseScreen.Username=",
+                      {
+                        "Ref": "DatabaseScreenUsername"
+                      },
+                      "\n",
+                      "DatabaseScreen.Password=",
+                      {
+                        "Ref": "DatabaseScreenPassword"
+                      },
+                      "\n",
+                      "DatabaseScreen.SQLServer.Instance=",
+                      {
+                        "Ref": "DatabaseScreenSQLServerInstance"
+                      },
+                      "\n",
+                      "DatabaseScreen.SQLServer.Domain=",
+                      {
+                        "Ref": "DatabaseScreenSQLServerDomain"
+                      },
+                      "\n",
+                      "DatabaseScreen.SQLServer.UseDefaultCollation=",
+                      {
+                        "Ref": "DatabaseScreenSQLServerUseDefaultCollation"
+                      },
+                      "\n",
+                      "AddressAndPortsScreen.ManagerPort",
+                      {
+                        "Ref": "AddressAndPortsScreenManagerPort"
+                      },
+                      "\n",
+                      "AddressAndPortsScreen.HeartbeatPort=",
+                      {
+                        "Ref": "AddressAndPortsScreenHeartbeatPort"
+                      },
+                      "\n",
+                      "AddressAndPortsScreen.NewNode=",
+                      {
+                        "Ref": "AddressAndPortsScreenNewNode"
+                      },
+                      "\n",
+                      "CCredentialsScreen.UseStrongPasswords=",
+                      {
+                        "Ref": "CredentialsScreenUseStrongPasswords"
+                      },
+                      "\n",
+                      "SecurityUpdateScreen.UpdateComponents=",
+                      {
+                        "Ref": "SecurityUpdateScreenUpdateComponents"
+                      },
+                      "\n",
+                      "SecurityUpdateScreen.UpdateSoftware=",
+                      {
+                        "Ref": "SecurityUpdateScreenUpdateSoftware"
+                      },
+                      "\n",
+                      "SmartProtectionNetworkScreen.IndustryType=",
+                      {
+                        "Ref": "SmartProtectionNetworkScreenIndustryType"
+                      },
+                      "\n"
+                    ]
+                  ]
+                }
+              },
+              "C:\\Trend\\Manager-Windows-9.0.6500.x64.exe": {
+                "source": "https://s3-ap-southeast-2.amazonaws.com/cloudtrek-customers-deployment/Manager-Windows-9.0.6500.x64.exe"
+              }
+            },
+            "commands": {
+              "1-TrendInstall": {
+                "command": "C:\\Trend\\Manager-Windows-9.0.6500.x64.exe -q -console -Dinstall4j.language=en -varfile properties.properties"
+              },
+              "services": {
+                "windows": {
+                  "cfn-hup": {
+                    "enabled": "true",
+                    "ensureRunning": "true",
+                    "files": [
+                      "c:\\cfn\\cfn-hup.conf",
+                      "c:\\cfn\\hooks.d\\cfn-auto-reloader.conf"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "Properties": {
+        "InstanceType": {
+          "Ref": "InstanceType"
+        },
+        "ImageId": {
+          "Fn::FindInMap": [
+            "AWSRegion2AMI",
+            {
+              "Ref": "AWS::Region"
+            },
+            "Windows2012r2"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "SubnetId"
+        },
+        "SecurityGroupIds": {
+          "Ref": "SecurityGroup"
+        },
+        "KeyName": {
+          "Ref": "KeyName"
+        },
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "<script>\n",
+                "cfn-init.exe -v -s ",
+                {
+                  "Ref": "AWS::StackId"
+                },
+                " -r TrendManager",
+                " --region ",
+                {
+                  "Ref": "AWS::Region"
+                },
+                "\n",
+                "</script>"
+              ]
+            ]
+          }
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "TrendManagerIP": {
+        "Value": {
+        "Fn::GetAtt": [
+          "TrendManager",
+          "PrivateIp"
+        ]
+      },
+      "Description": "IP Address for the Trend Manager"
+    },
+    "InstanceID": {
+      "Value": {
+        "Ref": "TrendManager"
+      }
+    }
+  }
+}
