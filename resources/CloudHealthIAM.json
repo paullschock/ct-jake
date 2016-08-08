@@ -1,6 +1,234 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "",
+  "Description": "IAM User for CloudHealth allowing ReadOnly Access",
+  "Parameters": {
+    "BillingBucket": {
+      "Description": "The S3 Billing Bucket",
+      "Type": "AWS::S3::Bucket"
+    },
+    "CloudTrailEnabled": {
+      "Description": "Whether or not AWS Config is enabled or not",
+      "Type": "String",
+      "AllowedValues": [
+        "true",
+        "false"
+      ]
+    },
+    "CloudTrailBucket": {
+      "Description": "The S3 Bucket where the CloudTrail Logs are located",
+      "Type": "AWS::S3::Bucket"
+    },
+    "AWSConfigEnabled": {
+      "Description": "Whether or not AWS Config is enabled or not",
+      "Type": "String",
+      "AllowedValues": [
+        "true",
+        "false"
+      ]
+    },
+    "ConfigBucket": {
+      "Description": "The S3 Bucket where AWS Config Logs located",
+      "Type": "AWS::S3::Bucket"
+    },
+    "SecureUserPassword": {
+      "Description": "The password for the IAM User",
+      "NoEcho": true,
+      "Type": "String"
+    },
+    "IAMName": {
+      "Description": "The password for the IAM User",
+      "Type": "String",
+      "Default": "CloudHealth"
+    }
+  },
   "Resources": {
+    "CloudHealthManagedPolicy": {
+      "Type": "AWS::IAM::ManagedPolicy",
+      "Properties": {
+        "Description": "ReadOnly policy for CloudHealth",
+        "Path": "/",
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "aws-portal:ViewBilling",
+                "aws-portal:ViewUsage",
+                "autoscaling:Describe*",
+                "cloudformation:ListStacks",
+                "cloudformation:ListStackResources",
+                "cloudformation:DescribeStacks",
+                "cloudformation:DescribeStackEvents",
+                "cloudformation:DescribeStackResources",
+                "cloudformation:GetTemplate",
+                "cloudfront:Get*",
+                "cloudfront:List*",
+                "cloudwatch:Describe*",
+                "cloudwatch:Get*",
+                "cloudwatch:List*",
+                "dynamodb:DescribeTable",
+                "dynamodb:ListTables",
+                "ec2:Describe*",
+                "elasticache:Describe*",
+                "elasticache:ListTagsForResource",
+                "elasticbeanstalk:Check*",
+                "elasticbeanstalk:Describe*",
+                "elasticbeanstalk:List*",
+                "elasticbeanstalk:RequestEnvironmentInfo",
+                "elasticbeanstalk:RetrieveEnvironmentInfo",
+                "elasticloadbalancing:Describe*",
+                "elasticmapreduce:Describe*",
+                "elasticmapreduce:List*",
+                "lambda:List*",
+                "iam:List*",
+                "iam:Get*",
+                "redshift:Describe*",
+                "route53:Get*",
+                "route53:List*",
+                "rds:Describe*",
+                "rds:ListTagsForResource",
+                "s3:List*",
+                "s3:GetBucketTagging",
+                "s3:GetBucketLocation",
+                "s3:GetBucketLogging",
+                "s3:GetBucketVersioning",
+                "s3:GetBucketWebsite",
+                "sdb:GetAttributes",
+                "sdb:List*",
+                "sdb:Select*",
+                "ses:Get*",
+                "ses:List*",
+                "sns:Get*",
+                "sns:List*",
+                "sqs:GetQueueAttributes",
+                "sqs:ListQueues",
+                "storagegateway:List*",
+                "storagegateway:Describe*"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:Get*",
+                "s3:List*",
+                "s3:GetBucketAcl",
+                "s3:GetBucketPolicy",
+                "s3:PutObject"
+              ],
+              "Resource": [
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:s3::",
+                      {
+                        "Ref": "BillingBucket"
+                      }
+                    ],
+                    [
+                      "arn:aws:s3::",
+                      {
+                        "Ref": "BillingBucket"
+                      },
+                      "/*"
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:Get*",
+                "s3:List*"
+              ],
+              "Resource": [
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:s3::",
+                      {
+                        "Ref": "CloudTrailBucket"
+                      }
+                    ],
+                    [
+                      "arn:aws:s3::",
+                      {
+                        "Ref": "CloudTrailBucket"
+                      },
+                      "/*"
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:Get*",
+                "s3:List*"
+              ],
+              "Resource": [
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:s3::",
+                      {
+                        "Ref": "ConfigBucket"
+                      }
+                    ],
+                    [
+                      "arn:aws:s3::",
+                      {
+                        "Ref": "ConfigBucket"
+                      },
+                      "/*"
+                    ]
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "CloudHealthIAMUser": {
+      "Type": "AWS::IAM::User",
+      "Properties": {
+        "Policies": {
+          "Ref": "CloudHealthManagedPolicy"
+        },
+        "UserName": {
+          "Ref": "IAMName"
+        }
+      }
+    },
+    "CloudHealthAccessKey": {
+      "Type": "AWS::IAM::AccessKey",
+      "Properties": {
+        "UserName": {
+          "Ref": "CloudHealthIAMUser"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "IAMAccessKey": {
+      "Value": {
+        "Ref": "CloudHealthAccessKey"
+      }
+    },
+    "IAMSecretKey": {
+      "Value": {
+        "Fn:GetAtt": [
+          "CloudHealthAccessKey",
+          "SecretAccessKey"
+        ]
+      }
+    }
   }
 }
