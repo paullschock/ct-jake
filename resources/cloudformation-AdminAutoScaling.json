@@ -51,7 +51,7 @@
             "ConstraintDescription":"OS Volume Size must be a value between 30 and 1024"
         },
         "OSVolumeType":{
-            "Description":"Type of the OS volume",
+            "Descroption":"Type of the OS volume",
             "Type":"String",
             "Default":"gp2",
             "AllowedValues":[

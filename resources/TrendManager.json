@@ -2,66 +2,63 @@
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "AWS CloudFormation template to deploy EC2 Instance customized for a TrendManager Installation",
   "Parameters": {
+    "AttachEIP": {
+      "Type": "String",
+      "Description": "Attach Elastic IP to instance?",
+      "Default": "true",
+      "AllowedValues": [
+        "true",
+        "false"
+      ]
+    },
     "SecurityGroup": {
       "Description": "The option to chose the Security Group that this instance will be a part of ",
+      "Default": "sg-754f2f11,sg-724f2f16",
       "Type": "List<AWS::EC2::SecurityGroup::Id>"
-    },
-    "LicenseKey": {
-      "Description": "Trend License Key",
-      "Type": "String"
     },
     "SubnetId": {
       "Description": "The SubnetId",
+      "Default": "subnet-63ced214",
       "Type": "String"
     },
     "KeyName": {
       "Description": "Name of an existing EC2 KeyPair",
+      "Default": "CUSTOMERS-CORE-TREND",
       "Type": "AWS::EC2::KeyPair::KeyName"
     },
-    "CredentialsScreenAdministratorUsername": {
-      "Description": "Username for master administrator",
+    "Customer": {
+      "Description": "The Customer tag to allocate costs to",
+      "Default": "CTShared",
       "Type": "String"
     },
-    "CredentialsScreenAdministratorPassword": {
-      "Description": "Password for master administrator",
-      "Type": "String"
-    },
-    "DatabaseScreenDatabaseType": {
-      "Description": "Type of Database to install",
+    "Name": {
+      "Description": "The Name tag to allocate costs to",
       "Type": "String",
-      "Default": "Microsoft SQL Server",
+      "Default": "CoreTrend",
+      "MinLength": "3",
+      "MaxLength": "255"
+    },
+    "RoleParam": {
+      "Description": "IAM role for Web Server",
+      "Default": "core-trend",
+      "Type": "String"
+    },
+    "AddressAndPortsScreenManagerAddress": {
+      "Description": "Trend software Parameters. Port used for applications and agent connecitons",
+      "Type": "String",
+      "Default": "localhost"
+    },
+    "AddressAndPortsScreenNewNode": {
+      "Description": "Trend software Parameters. Relevant between a new and an old installation",
+      "Type": "String",
+      "Default": "True",
       "AllowedValues": [
-        "Embedded",
-        "Microsoft SQL Server",
-        "Oracle"
+        "True",
+        "False"
       ]
     },
-    "DatabaseScreenDatabaseName": {
-      "Description": "Name of the Database",
-      "Type": "String"
-    },
-    "DatabaseScreenHostname": {
-      "Description": "Database Hostname",
-      "Type": "String"
-    },
-    "DatabaseScreenUsername": {
-      "Description": "The username for the DataBase Screen",
-      "Type": "String"
-    },
-    "DatabaseScreenPassword": {
-      "Description": "The password for the DataBase Screen",
-      "Type": "String"
-    },
-    "DatabaseScreenSQLServerInstance": {
-      "Description": "The instance of the SQL Database",
-      "Type": "String"
-    },
-    "DatabaseScreenSQLServerDomain": {
-      "Description": "Option to join the SQL Server to a domain",
-      "Type": "String"
-    },
-    "DatabaseScreenSQLServerUseDefaultCollation": {
-      "Description": "Optional",
+    "UpgradeVerificationScreenOverwrite": {
+      "Description": "JAKE",
       "Type": "String",
       "Default": "False",
       "AllowedValues": [
@@ -69,8 +66,26 @@
         "False"
       ]
     },
+    "LicenseScreenLicense": {
+      "Description": "Trend License Key",
+      "Type": "String"
+    },
+    "DatabaseScreenDatabaseType": {
+      "Description": "Type of Database to install",
+      "Type": "String",
+      "Default": "Embedded Microsoft SQL Server Express",
+      "AllowedValues": [
+        "Embedded Microsoft SQL Server Express",
+        "Microsoft SQL Server",
+        "Oracle"
+      ]
+    },
+    "DatabaseScreenPassword": {
+      "Description": "Trend software Parameters. The password for the DataBase Screen",
+      "Type": "String"
+    },
     "AddressAndPortsScreenManagerPort": {
-      "Description": "Port used for management communications",
+      "Description": "Trend software Parameters. Port used for management communications",
       "Type": "String",
       "Default": "4119",
       "AllowedValues": [
@@ -78,24 +93,24 @@
       ]
     },
     "AddressAndPortsScreenHeartbeatPort": {
-      "Description": "Port used for applications and agent connecitons",
+      "Description": "Trend software Parameters. Port used for applications and agent connecitons",
       "Type": "String",
       "Default": "4120",
       "AllowedValues": [
         "4120"
       ]
     },
-    "AddressAndPortsScreenNewNode": {
-      "Description": "Relevant between a new and an old installation",
+    "CredentialsScreenAdministratorUsername": {
+      "Description": "Trend software Parameters. Username for master administrator",
       "Type": "String",
-      "Default": "False",
-      "AllowedValues": [
-        "True",
-        "False"
-      ]
+      "Default": "masteradmin"
+    },
+    "CredentialsScreenAdministratorPassword": {
+      "Description": "Trend software Parameters. Password for master administrator",
+      "Type": "String"
     },
     "CredentialsScreenUseStrongPasswords": {
-      "Description": "The use of strong passwords is required",
+      "Description": "Trend software Parameters. The use of strong passwords is required",
       "Type": "String",
       "Default": "False",
       "AllowedValues": [
@@ -104,7 +119,7 @@
       ]
     },
     "SecurityUpdateScreenUpdateComponents": {
-      "Description": "Indicitive of whether or not to recieve automatic updates",
+      "Description": "Trend software Parameters. Indicitive of whether or not to recieve automatic updates",
       "Type": "String",
       "Default": "True",
       "AllowedValues": [
@@ -112,8 +127,8 @@
         "False"
       ]
     },
-    "SecurityUpdateScreenUpdateSoftware": {
-      "Description": "Check for new package updates",
+    "SoftwareUpdateScreenUpdateSoftware": {
+      "Description": "Trend software Parameters. Check for new package updates",
       "Type": "String",
       "Default": "True",
       "AllowedValues": [
@@ -121,8 +136,8 @@
         "False"
       ]
     },
-    "SmartProtectionNetworkScreenEnableFeedback": {
-      "Description": "Optional to provide installation feedback.",
+    "RelayScreenInstall": {
+      "Description": "JAKE.",
       "Type": "String",
       "Default": "False",
       "AllowedValues": [
@@ -130,14 +145,14 @@
         "False"
       ]
     },
-    "SmartProtectionNetworkScreenIndustryType": {
-      "Description": "Optional to provide installation feedback.",
+    "SmartProtectionNetworkScreenEnableFeedback": {
+      "Description": "Trend software Parameters. Optional to provide installation feedback.",
       "Type": "String"
     },
     "InstanceType": {
       "Description": "Amazon EC2 instance type",
       "Type": "String",
-      "Default": "m1.medium",
+      "Default": "t2.micro",
       "AllowedValues": [
         "t1.micro",
         "t2.micro",
@@ -188,61 +203,72 @@
       ],
       "ConstraintDescription": "must be a valid EC2 instance type."
     },
-    "SourceCidrForRDP": {
-      "Description": "IP Cidr from which you are likely to RDP into the instances. You can add rules later by modifying the created security groups e.g. 54.32.98.160/32",
+    "BuildBucket": {
+      "Description": "Bucket the build files come from",
       "Type": "String",
-      "MinLength": "9",
-      "MaxLength": "18"
-      }
+      "Default": "cloudtrek-customers-deployment"
+    }
+  },
+  "Conditions": {
+    "NeedsEIP": {
+      "Fn::Equals": [
+        {
+          "Ref": "AttachEIP"
+        },
+        "true"
+      ]
+    }
   },
   "Mappings": {
     "AWSRegion2AMI": {
-      "us-east-1": {
-        "Windows2008r2": "ami-31620c54",
-        "Windows2012r2": "ami-c9cea0ac"
-      },
-      "us-west-2": {
-        "Windows2008r2": "ami-d53c21e5",
-        "Windows2012r2": "ami-dfccd1ef"
-      },
-      "us-west-1": {
-        "Windows2008r2": "ami-2b2dd76f",
-        "Windows2012r2": "ami-890af0cd"
-      },
       "eu-west-1": {
-        "Windows2008r2": "ami-872f0ff0",
-        "Windows2012r2": "ami-abe9c9dc"
-      },
-      "eu-central-1": {
-        "Windows2008r2": "ami-98656585",
-        "Windows2012r2": "ami-3e737323"
-      },
-      "ap-northeast-1": {
-        "Windows2008r2": "ami-2c41ca2c",
-        "Windows2012r2": "ami-4623a846"
-      },
-      "ap-southeast-1": {
-        "Windows2008r2": "ami-80c2c8d2",
-        "Windows2012r2": "ami-58efe50a"
+        "Windows2012r2": "ami-50e67823"
       },
       "ap-southeast-2": {
-        "Windows2008r2": "ami-ed2b64d7",
-        "Windows2012r2": "ami-f53679cf"
-      },
-      "sa-east-1": {
-        "Windows2008r2": "ami-53db4e4e",
-        "Windows2012r2": "ami-3bce5b26"
-      },
-      "cn-north-1": {
-        "Windows2008r2": "ami-e2811ddb",
-        "Windows2012r2": "ami-f0811dc9"
+        "Windows2012r2": "ami-83b198e0"
       }
     }
   },
   "Resources": {
+    "PublicIP": {
+      "Condition": "NeedsEIP",
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc"
+      }
+    },
+    "PublicIPAttachment": {
+      "Type": "AWS::EC2::EIPAssociation",
+      "Condition": "NeedsEIP",
+      "DependsOn": "PublicIP",
+      "Properties": {
+        "InstanceId": {
+          "Ref": "TrendManager"
+        },
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "PublicIP",
+            "AllocationId"
+          ]
+        }
+      }
+    },
     "TrendManager": {
       "Type": "AWS::EC2::Instance",
       "Metadata": {
+        "AWS::CloudFormation::Authentication": {
+          "RoleAccess": {
+            "buckets": [
+              {
+                "Ref": "BuildBucket"
+              }
+            ],
+            "roleName": {
+              "Ref": "RoleParam"
+            },
+            "type": "S3"
+          }
+        },
         "AWS::CloudFormation::Init": {
           "config": {
             "files": {
@@ -261,7 +287,8 @@
                       {
                         "Ref": "AWS::Region"
                       },
-                      "\n"                  ]
+                      "\n"
+                    ]
                   ]
                 }
               },
@@ -282,24 +309,38 @@
                       {
                         "Ref": "AWS::Region"
                       },
+                      " --role ",
+                      {
+                        "Ref": "RoleParam"
+                      },
                       "\n"
                     ]
                   ]
                 }
               },
-              "c:\\Trend\\Parameters.parameters": {
+              "c:\\Trend\\install.properties": {
                 "content": {
                   "Fn::Join": [
                     "",
                     [
-                      "LicenseScreen.License=",
+                      "AddressAndPortsScreen.ManagerAddress=",
                       {
-                        "Ref": "LicenseKey"
+                        "Ref": "AddressAndPortsScreenManagerAddress"
                       },
                       "\n",
-                      "CredentialsScreen.Administrator.Username=",
+                      "AddressAndPortsScreen.NewNode=",
                       {
-                        "Ref": "CredentialsScreenAdministratorUsername"
+                        "Ref": "AddressAndPortsScreenNewNode"
+                      },
+                      "\n",
+                      "UpgradeVerificationScreen.Overwrite=",
+                      {
+                        "Ref": "UpgradeVerificationScreenOverwrite"
+                      },
+                      "\n",
+                      "LicenseScreen.License=",
+                      {
+                        "Ref": "LicenseScreenLicense"
                       },
                       "\n",
                       "DatabaseScreen.DatabaseType=",
@@ -307,42 +348,12 @@
                         "Ref": "DatabaseScreenDatabaseType"
                       },
                       "\n",
-                      "DatabaseScreen.Hostname=",
-                      {
-                        "Ref": "DatabaseScreenHostname"
-                      },
-                      "\n",
-                      "DatabaseScreen.DatabaseName=",
-                      {
-                        "Ref": "DatabaseScreenDatabaseName"
-                      },
-                      "\n",
-                      "DatabaseScreen.Username=",
-                      {
-                        "Ref": "DatabaseScreenUsername"
-                      },
-                      "\n",
                       "DatabaseScreen.Password=",
                       {
                         "Ref": "DatabaseScreenPassword"
                       },
                       "\n",
-                      "DatabaseScreen.SQLServer.Instance=",
-                      {
-                        "Ref": "DatabaseScreenSQLServerInstance"
-                      },
-                      "\n",
-                      "DatabaseScreen.SQLServer.Domain=",
-                      {
-                        "Ref": "DatabaseScreenSQLServerDomain"
-                      },
-                      "\n",
-                      "DatabaseScreen.SQLServer.UseDefaultCollation=",
-                      {
-                        "Ref": "DatabaseScreenSQLServerUseDefaultCollation"
-                      },
-                      "\n",
-                      "AddressAndPortsScreen.ManagerPort",
+                      "AddressAndPortsScreen.ManagerPort=",
                       {
                         "Ref": "AddressAndPortsScreenManagerPort"
                       },
@@ -352,9 +363,29 @@
                         "Ref": "AddressAndPortsScreenHeartbeatPort"
                       },
                       "\n",
-                      "AddressAndPortsScreen.NewNode=",
+                      "CredentialsScreen.Administrator.Username=",
                       {
-                        "Ref": "AddressAndPortsScreenNewNode"
+                        "Ref": "CredentialsScreenAdministratorUsername"
+                      },
+                      "\n",
+                      "CredentialsScreen.Administrator.Password=",
+                      {
+                        "Ref": "CredentialsScreenAdministratorPassword"
+                      },
+                      "\n",
+                      "CredentialsScreen.UseStrongPasswords",
+                      {
+                        "Ref": "CredentialsScreenUseStrongPasswords"
+                      },
+                      "\n",
+                      "SecurityUpdateScreen.UpdateComponents=",
+                      {
+                        "Ref": "SecurityUpdateScreenUpdateComponents"
+                      },
+                      "\n",
+                      "SoftwareUpdateScreen.UpdateSoftware=",
+                      {
+                        "Ref": "SoftwareUpdateScreenUpdateSoftware"
                       },
                       "\n",
                       "CCredentialsScreen.UseStrongPasswords=",
@@ -367,27 +398,28 @@
                         "Ref": "SecurityUpdateScreenUpdateComponents"
                       },
                       "\n",
-                      "SecurityUpdateScreen.UpdateSoftware=",
+                      "RelayScreen.Install=",
                       {
-                        "Ref": "SecurityUpdateScreenUpdateSoftware"
+                        "Ref": "RelayScreenInstall"
                       },
                       "\n",
-                      "SmartProtectionNetworkScreen.IndustryType=",
+                      "SmartProtectionNetworkScreen.EnableFeedback=",
                       {
-                        "Ref": "SmartProtectionNetworkScreenIndustryType"
+                        "Ref": "SmartProtectionNetworkScreenEnableFeedback"
                       },
                       "\n"
                     ]
                   ]
                 }
               },
-              "C:\\Trend\\Manager-Windows-9.0.6500.x64.exe": {
-                "source": "https://s3-ap-southeast-2.amazonaws.com/cloudtrek-customers-deployment/Manager-Windows-9.0.6500.x64.exe"
+              "C:\\Trend\\Manager-Windows-9.6.1589.x64.exe": {
+                "source": "https://s3-ap-southeast-2.amazonaws.com/cloudtrek-customers-deployment/TrendMicro/Manager-Windows-9.6.1589.x64.exe",
+                "authentication": "RoleAccess"
               }
             },
             "commands": {
               "1-TrendInstall": {
-                "command": "C:\\Trend\\Manager-Windows-9.0.6500.x64.exe -q -console -Dinstall4j.language=en -varfile properties.properties"
+                "command": "C:\\Trend\\Manager-Windows-9.6.1589.x64.exe -q -console -Dinstall4j.language=en -varfile install.properties"
               },
               "services": {
                 "windows": {
@@ -408,6 +440,9 @@
       "Properties": {
         "InstanceType": {
           "Ref": "InstanceType"
+        },
+        "IamInstanceProfile": {
+          "Ref": "RoleParam"
         },
         "ImageId": {
           "Fn::FindInMap": [
@@ -442,18 +477,36 @@
                 {
                   "Ref": "AWS::Region"
                 },
+                " --role ",
+                {
+                  "Ref": "RoleParam"
+                },
                 "\n",
                 "</script>"
               ]
             ]
           }
-        }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Ref": "Name"
+            }
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "Customer"
+            }
+          }
+        ]
       }
     }
   },
   "Outputs": {
     "TrendManagerIP": {
-        "Value": {
+      "Value": {
         "Fn::GetAtt": [
           "TrendManager",
           "PrivateIp"
