@@ -1,0 +1,874 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "This template deploys Windows 2012 R2 Web server for the TASS.web application with the appropriate roles and features turned on.",
+  "Parameters": {
+    "VpcId": {
+      "Default":"vpc-4b909829",
+      "Type": "AWS::EC2::VPC::Id",
+      "Description": "VpcId of your existing Virtual Private Cloud (VPC)"
+    },
+    "AvailabilityZone": {
+      "Default":"ap-southeast-2a",
+      "Type": "AWS::EC2::AvailabilityZone::Name",
+      "Description": "Availability zone to deploy instance into"
+    },
+    "Subnet": {
+      "Default":"subnet-c27c56b6",
+      "Type": "AWS::EC2::Subnet::Id",
+      "Description": "The Subnet to deploy the instance into"
+    },
+    "S3BuildBucket": {
+      "Description": "S3 Bucket name containing the build files",
+      "Default":"tass-software",
+      "Type": "String"
+    },
+    "KeyPairName": {
+      "Default":"CUSTOMERS-TASS-WEB",
+      "Description": "Name of an existing Amazon EC2 key pair for RDP access",
+      "Type": "AWS::EC2::KeyPair::KeyName"
+    },
+    "TASSSupportPassword": {
+      "Description": "Password for the TASS Support User",
+      "NoEcho": true,
+      "Type": "String"
+    },
+    "ColdFusionPassword": {
+      "Description": "Password for the ColdFusion Account",
+      "NoEcho": true,
+      "Type": "String"
+    },
+    "InstanceType": {
+      "Description": "Amazon EC2 instance type",
+      "Type": "String",
+      "Default": "m4.large",
+      "AllowedValues": [
+        "t2.micro",
+        "t2.medium",
+        "t2.large",
+        "r4.large",
+        "r4.xlarge",
+        "m4.large",
+        "m4.xlarge",
+        "c4.large",
+        "c4.xlarge"
+      ]
+    },
+    "Roles": {
+      "Description": "A SPACE separated list of roles that you want to enable on this instance. Valid values are AD-Certificate, AD-Domain-Services, ADLDS, DHCP, DNS, Fax, File-Services, NPAS, Print-Services, Web-Server, and WDS.",
+      "Type": "String",
+      "Default": "Web-Server"
+    },
+    "Features": {
+      "Description": "A SPACE separated list of features that you want to enable on this instance. Valid values are NET-Framework, BITS, BitLocker, BranchCache, CMAK, Desktop-Experience, DAMC, Failover-Clustering, GPMC, Ink-Handwriting, Internet-Print-Client, ISNS, LPR-Port-Monitor, MSMQ, Multipath-IO, NLB, PNRP, qWave, Remote-Assistance, RDC, RPC-over-HTTP-Proxy, Simple-TCPIP, SMTP-Server, SNMP-Services, Storage-Mgr-SANS, Subsystem-UNIX-Apps, Telnet-Client, Telnet-Server, TFTP-Client, Biometric-Framework, Windows-Internal-DB, PowerShell-ISE, Backup-Features, Migration, WSRM, TIFF-IFilter, WinRM-IIS-Ext, WINS-Server, Wireless-Networking, and XPS-Viewer.",
+      "Type": "String",
+      "Default": "NET-Framework"
+    },
+    "WebServerSecurityGroup": {
+      "Default":"sg-8b3832e9",
+      "Description": "Security Groups to attach to the Instance",
+      "Type": "List<AWS::EC2::SecurityGroup::Id>"
+    },
+    "3LetterCode": {
+      "Description": "The 3 letter code to assign to the school",
+      "Type": "String",
+      "AllowedPattern": "[A-Z0-9][A-Z0-9][A-Z0-9]"
+    },
+    "CustomerTag": {
+      "Description": "The Customer tag to assign costs to",
+      "Type": "String",
+      "Default": "TASS"
+    },
+    "SchoolTag": {
+      "Description": "The School tag to assign costs to",
+      "Type": "String"
+    },
+    "VolumeEncryption": {
+      "Description": "Boolean to encrypt the additional volumes",
+      "Type": "String",
+      "Default": "true",
+      "AllowedValues": [
+        "true",
+        "false"
+      ]
+    },
+    "DataVolumeSize": {
+      "Description": "Data Volume (D drive) Size in Gb",
+      "Type": "String",
+      "Default": "50",
+      "AllowedPattern": "\\d{2,5}",
+      "ConstraintDescription": "Data Volume Size must be an integer"
+    },
+    "DataVolumeType": {
+      "Description": "Type of the data volume",
+      "Type": "String",
+      "Default": "gp2",
+      "AllowedValues": [
+        "standard",
+        "io1",
+        "gp2"
+      ]
+    },
+    "OSVolumeSize": {
+      "Description": "OS Volume (C drive) Size in Gb",
+      "Type": "String",
+      "Default": "50",
+      "AllowedPattern": "\\d{2,5}",
+      "ConstraintDescription": "Volume Size must be an integer"
+    },
+    "OSVolumeType": {
+      "Description": "Type of the OS volume",
+      "Type": "String",
+      "Default": "gp2",
+      "AllowedValues": [
+        "standard",
+        "gp2"
+      ]
+    },
+    "AttachEIP": {
+      "Type": "String",
+      "Description": "Attach Elastic IP to instance?",
+      "Default": "false",
+      "AllowedValues": [
+        "true",
+        "false"
+      ]
+    },
+    "RoleName": {
+      "Default": "tass-web",
+      "Description": "EC2 Role Name to apply to the instance",
+      "Type": "String"
+    }
+  },
+  "Conditions": {
+    "NeedsEIP": {
+      "Fn::Equals": [
+        {
+          "Ref": "AttachEIP"
+        },
+        "true"
+      ]
+    }
+  },
+  "Mappings": {
+    "RegionMap": {
+      "eu-west-1": {
+        "AMI": "ami-899eafea"
+      },
+      "ap-southeast-2": {
+        "AMI": "ami-37526954"
+      }
+    },
+    "AvailabilityZones":{
+      "ap-southeast-2":{
+        "ZoneA":"ap-southeast-2a",
+        "ZoneB":"ap-southeast-2b",
+        "ZoneC":"ap-southeast-2c"
+      }
+    }
+  },
+  "Resources": {
+    "PublicIP": {
+      "Condition": "NeedsEIP",
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc"
+      }
+    },
+    "PublicIPAttachment": {
+      "Type": "AWS::EC2::EIPAssociation",
+      "Condition": "NeedsEIP",
+      "DependsOn": "PublicIP",
+      "Properties": {
+        "InstanceId": {
+          "Ref": "WebServer"
+        },
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "PublicIP",
+            "AllocationId"
+          ]
+        }
+      }
+    },
+    "DataVolume": {
+      "Type": "AWS::EC2::Volume",
+      "Properties": {
+        "AvailabilityZone": {
+          "Ref": "AvailabilityZone"
+        },
+        "Encrypted": {
+          "Ref": "VolumeEncryption"
+        },
+        "Size": {
+          "Ref": "DataVolumeSize"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Data"
+          },
+          {
+            "Key": "Server",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "TASS",
+                  {
+                    "Ref": "3LetterCode"
+                  },
+                  "WEB001"
+                ]
+              ]
+            }
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "CustomerTag"
+            }
+          },
+          {
+            "Key": "School",
+            "Value": {
+              "Ref": "SchoolTag"
+            }
+          }
+        ],
+        "VolumeType": {
+          "Ref": "DataVolumeType"
+        }
+      },
+      "DeletionPolicy": "Snapshot"
+    },
+    "WebServer": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "AvailabilityZone": {
+          "Ref": "AvailabilityZone"
+        },
+        "InstanceType": {
+          "Ref": "InstanceType"
+        },
+        "IamInstanceProfile": {
+          "Ref": "RoleName"
+        },
+        "ImageId": {
+          "Fn::FindInMap": [
+            "RegionMap",
+            {
+              "Ref": "AWS::Region"
+            },
+            "AMI"
+          ]
+        },
+        "Volumes": [
+          {
+            "VolumeId": {
+              "Ref": "DataVolume"
+            },
+            "Device": "xvdf"
+          }
+        ],
+        "InstanceInitiatedShutdownBehavior": "stop",
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/sda1",
+            "Ebs": {
+              "VolumeType": {
+                "Ref": "OSVolumeType"
+              },
+              "DeleteOnTermination": "true",
+              "VolumeSize": {
+                "Ref": "OSVolumeSize"
+              }
+            }
+          }
+        ],
+        "SecurityGroupIds": {
+          "Ref": "WebServerSecurityGroup"
+        },
+        "SubnetId": {
+          "Ref": "Subnet"
+        },
+        "KeyName": {
+          "Ref": "KeyPairName"
+        },
+        "Tags": [
+          {
+            "Key": "School",
+            "Value": {
+              "Ref":"SchoolTag"
+            }
+          },
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "TASS",
+                  {
+                    "Ref": "3LetterCode"
+                  },
+                  "WEB001"
+                ]
+              ]
+            }
+          },
+          {
+            "Key": "Customer",
+            "Value": {
+              "Ref": "CustomerTag"
+            }
+          },
+          {
+            "Key": "School",
+            "Value": {
+              "Ref": "SchoolTag"
+            }
+          }
+        ],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "<script>\n",
+                "cfn-init.exe -v -c config -s ",
+                {
+                  "Ref": "AWS::StackId"
+                },
+                " -r WebServer",
+                " --region ",
+                {
+                  "Ref": "AWS::Region"
+                },
+                " --configsets config -v --role ",
+                {
+                  "Ref": "RoleName"
+                },
+                "\n",
+                "</script>"
+              ]
+            ]
+          }
+        }
+      },
+      "Metadata": {
+        "AWS::CloudFormation::Authentication": {
+          "RoleAccess": {
+            "roleName": {
+              "Ref": "RoleName"
+            },
+            "type": "S3"
+          },
+          "buckets": [
+            {
+              "Ref": "S3BuildBucket"
+            }
+          ]
+        },
+        "AWS::CloudFormation::Init": {
+          "configSets": {
+            "config": [
+              "CFNsetup",
+              "WindowsConfig",
+              "InitDrives",
+              "RenameComputer",
+              "ConfigureServices",
+              "TASSInstall",
+              "WindowsFirewall"
+            ]
+          },
+          "CFNsetup": {
+            "files": {
+              "c:\\cfn\\cfn-hup.conf": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "[main]\n",
+                      "stack=",
+                      {
+                        "Ref": "AWS::StackId"
+                      },
+                      "\n",
+                      "region=",
+                      {
+                        "Ref": "AWS::Region"
+                      },
+                      "\n"
+                    ]
+                  ]
+                }
+              },
+              "c:\\cfn\\hooks.d\\cfn-auto-reloader.conf": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "[cfn-auto-reloader-hook]\n",
+                      "triggers=post.update\n",
+                      "path=Resources.WebServer.Metadata.AWS::CloudFormation::Init\n",
+                      "action=cfn-init.exe -v -s ",
+                      {
+                        "Ref": "AWS::StackId"
+                      },
+                      " -r WebServer",
+                      " --region ",
+                      {
+                        "Ref": "AWS::Region"
+                      },
+                      " --configsets config -v --role ",
+                      {
+                        "Ref": "RoleName"
+                      },
+                      " \n"
+                    ]
+                  ]
+                }
+              }
+            },
+            "services": {
+              "windows": {
+                "cfn-hup": {
+                  "enabled": "true",
+                  "ensureRunning": "true",
+                  "files": [
+                    "c:\\cfn\\cfn-hup.conf",
+                    "c:\\cfn\\hooks.d\\cfn-auto-reloader.conf"
+                  ]
+                }
+              }
+            }
+          },
+          "WindowsConfig": {
+            "commands": {
+              "1-set-timezone": {
+                "command": "%windir%\\system32\\tzutil /s \"AUS Eastern Standard Time\"",
+                "waitAfterCompletion": "1"
+              },
+              "2-set-culture": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe ",
+                      "-ExecutionPolicy ",
+                      "Unrestricted ",
+                      "C:\\cfn\\scripts\\setculture.ps1"
+                    ]
+                  ]
+                },
+                "waitAfterCompletion": "1"
+              },
+              "3-configure-NET4": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe ",
+                      "-ExecutionPolicy ",
+                      "Unrestricted ",
+                      "c:\\cfn\\scripts\\installDOTNET.ps1"
+                    ]
+                  ]
+                },
+                "waitAfterCompletion": "1"
+              },
+              "4-configure-iis": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe ",
+                      "-ExecutionPolicy ",
+                      "Unrestricted ",
+                      "c:\\cfn\\scripts\\installIIS.ps1"
+                    ]
+                  ]
+                },
+                "waitAfterCompletion": "1"
+              }
+            },
+            "files": {
+              "c:\\cfn\\scripts\\setculture.ps1": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "Import-Module International",
+                      "\n",
+                      "Set-Culture en-AU",
+                      "\n",
+                      "Set-WinUserLanguageList en-AU -Force"
+                    ]
+                  ]
+                }
+              },
+              "c:\\cfn\\scripts\\installDOTNET.ps1": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "Import-Module servermanager",
+                      "\n",
+                      "Add-WindowsFeature NET-Framework-45-Core",
+                      "\n",
+                      "Add-WindowsFeature NET-Framework-45-Features"
+                    ]
+                  ]
+                }
+              },
+              "c:\\cfn\\scripts\\installIIS.ps1": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "Import-Module servermanager",
+                      "\n",
+                      "Add-WindowsFeature Web-Server",
+                      "\n",
+                      "Add-WindowsFeature Web-WebServer",
+                      "\n",
+                      "Add-WindowsFeature Web-Common-Http",
+                      "\n",
+                      "Add-WindowsFeature Web-Http-Errors",
+                      "\n",
+                      "Add-WindowsFeature Web-Security",
+                      "\n",
+                      "Add-WindowsFeature Web-Windows-Auth",
+                      "\n",
+                      "Add-WindowsFeature Web-Net-Ext45",
+                      "\n",
+                      "Add-WindowsFeature Web-Mgmt-Tools",
+                      "\n",
+                      "Add-WindowsFeature Web-Mgmt-Console"
+                    ]
+                  ]
+                }
+              }
+            }
+          },
+          "InitDrives": {
+            "files": {
+              "C:\\cfn\\scripts\\PSINITDRIVES.ps1": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "param([Int32]$number=1,",
+                      "[Int32]$blocksize=4096,",
+                      "\n[String]$letter=\"\",",
+                      "\n[String]$label=\"\")",
+                      "\nsleep -seconds 30",
+                      "\n$osversion = (Get-WmiObject -class Win32_OperatingSystem).version",
+                      "\nif ($osversion -gt 6.2){",
+                      "\nif (Get-Disk -Number $number | Where partitionstyle -eq 'RAW') {",
+                      "\n  Initialize-Disk -Number $number -PartitionStyle MBR -PassThru -Confirm:$false | New-Partition -DriveLetter $letter -UseMaximumSize | Format-Volume -FileSystem NTFS -AllocationUnitSize $blocksize -NewFileSystemLabel $label -Confirm:$false",
+                      "\n} else {",
+                      "\n   Clear-Disk -Number $number -Confirm:$false -PassThru -RemoveData | Initialize-Disk -PartitionStyle MBR -PassThru -Confirm:$false | New-Partition -DriveLetter $letter -UseMaximumSize | Format-Volume -FileSystem NTFS -AllocationUnitSize $blocksize -NewFileSystemLabel $label -Confirm:$false",
+                      "\n}",
+                      "\n}",
+                      "\nelse {",
+                      "\n$script = @\"\nselect disk $number\nonline disk noerr\nattributes disk clear readonly noerr\ncreate partition primary noerr\nformat quick fs=NTFS label=\"$label\"\nassign letter=\"$letter\"\n\"@",
+                      "\n$scriptdisk += $script + \"`n\"",
+                      "\n$scriptdisk | diskpart",
+                      "\n}"
+                    ]
+                  ]
+                }
+              },
+              "C:\\cfn\\scripts\\TASSCREATEFOLDERS.ps1": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "New-Item D:\\Scripts -type directory",
+                      "\nNew-Item D:\\tassdoc -type directory",
+                      "\nNew-Item D:\\tasshelp -type directory",
+                      "\nNew-Item D:\\tasslms -type directory",
+                      "\nNew-Item D:\\tassportal -type directory",
+                      "\nNew-Item D:\\tassreporting -type directory",
+                      "\nNew-Item D:\\tassweb -type directory",
+                      "\n"
+                    ]
+                  ]
+                }
+              }
+            },
+            "commands": {
+              "1-initialize-drive-d": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe ",
+                      "-ExecutionPolicy",
+                      " Unrestricted",
+                      " C:\\cfn\\scripts\\PSINITDRIVES.ps1 -number 1 -letter D -label \"DATA\""
+                    ]
+                  ]
+                },
+                "waitAfterCompletion": 0
+              },
+              "2-create-tass-folders": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe ",
+                      "-ExecutionPolicy",
+                      " Unrestricted",
+                      " C:\\cfn\\scripts\\TASSCREATEFOLDERS.ps1"
+                    ]
+                  ]
+                }
+              }
+            }
+          },
+          "RenameComputer": {
+            "files": {
+              "C:\\cfn\\scripts\\RENAMECOMPUTER.ps1": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "Rename-Computer -NewName '",
+                      {
+                        "Fn::Join": [
+                          "-",
+                          [
+                            "TASS",
+                            {
+                              "Ref": "3LetterCode"
+                            },
+                            "WEB001"
+                          ]
+                        ]
+                      },
+                      "' -Force -Verbose -Confirm:$false -Restart"
+                    ]
+                  ]
+                }
+              }
+            },
+            "commands": {
+              "1-rename-computer": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe ",
+                      "-ExecutionPolicy",
+                      " Unrestricted",
+                      " C:\\cfn\\scripts\\RENAMECOMPUTER.ps1"
+                    ]
+                  ]
+                },
+                "waitAfterCompletion": "forever"
+              }
+            }
+          },
+          "ConfigureServices": {
+            "files": {
+              "c:\\Temp\\CloudBerryExplorerSetup_v4.0.7.38_netv4.0.exe": {
+                "authentication": "RoleAccess",
+                "source": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "https://s3-ap-southeast-2.amazonaws.com/",
+                      {
+                        "Ref": "S3BuildBucket"
+                      },
+                      "/CloudBerryExplorerSetup_v4.0.7.38_netv4.0.exe"
+                    ]
+                  ]
+                }
+              }
+            },
+            "commands": {
+              "1-install-roles": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "if not \"None\" EQU \"",
+                      {
+                        "Ref": "Roles"
+                      },
+                      "\" (servermanagercmd -install ",
+                      {
+                        "Ref": "Roles"
+                      },
+                      " -restart)"
+                    ]
+                  ]
+                }
+              },
+              "2-install-features": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "if not \"None\" EQU \"",
+                      {
+                        "Ref": "Features"
+                      },
+                      "\" (servermanagercmd -install ",
+                      {
+                        "Ref": "Features"
+                      },
+                      " -restart)"
+                    ]
+                  ]
+                }
+              },
+              "3-CloudBerryExplorer": {
+                "command": "c:\\Temp\\CloudBerryExplorerSetup_v4.0.7.38_netv4.0.exe /S",
+                "ignoreErrors": "true",
+                "waitAfterCompletion": "1"
+              },
+              "4-TASSUserCreate": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "net user TASSSupport ",
+                      {
+                        "Ref": "TASSSupportPassword"
+                      },
+                      " /add /fullname:\"TASSSupport\" /Y"
+                    ]
+                  ]
+                },
+                "ignoreErrors": "true",
+                "waitAfterCompletion": "1"
+              },
+              "5-ColdFusionUserCreate": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "net user ColdFusion ",
+                      {
+                        "Ref": "ColdFusionPassword"
+                      },
+                      " /add /fullname:\"ColdFusion\" /Y"
+                    ]
+                  ]
+                },
+                "ignoreErrors": "true",
+                "waitAfterCompletion": "1"
+              },
+              "6-TASSGroupAdd": {
+                "command": "net localgroup Administrators TASSSupport /add",
+                "ignoreErrors": "true",
+                "waitAfterCompletion": "1"
+              }
+            }
+          },
+          "TASSInstall": {
+            "commands": {
+              "1-installJDM": {
+                "command": "C:\\Temp\\jdk-8u101-windows-x64.exe /s",
+                "waitAfterCompletion": "1"
+              }
+            },
+            "2-installColdFusion": {
+              "command": "C:\\Temp\\ColdFusion_11_WWEJ_win64.exe /s",
+              "waitAfterCompletion": "1"
+            },
+            "files": {
+              "c:\\Temp\\ColdFusion_11_WWEJ_win64.exe": {
+                "source": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "https://s3-ap-southeast-2.amazonaws.com/",
+                      {
+                        "Ref": "S3BuildBucket"
+                      },
+                      "/ColdFusion_11_WWEJ_win64.exe"
+                    ]
+                  ]
+                },
+                "authentication": "RoleAccess"
+              },
+              "c:\\Temp\\jdk-8u101-windows-x64.exe": {
+                "source": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "https://s3-ap-southeast-2.amazonaws.com/",
+                      {
+                        "Ref": "S3BuildBucket"
+                      },
+                      "/jdk-8u101-windows-x64.exe"
+                    ]
+                  ]
+                },
+                "authentication": "RoleAccess"
+              }
+            }
+          },
+          "WindowsFirewall": {
+            "commands": {
+              "AllowOutgoingEmail": {
+                "command": "netsh advfirewall firewall add rule name=\"CloudTrek Outbound Email\" dir=out action=allow protocol=TCP localport=587",
+                "waitAfterCompletion": 0
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "WebServerPrivateIp": {
+      "Value": {
+        "Fn::GetAtt": [
+          "WebServer",
+          "PrivateIp"
+        ]
+      },
+      "Description": "Private IP Address for the Web Server"
+    },
+    "WebServerWithPublicIp": {
+      "Condition": "NeedsEIP",
+      "Value": {
+        "Fn::GetAtt": [
+          "WebServer",
+          "PublicIp"
+        ]
+      },
+      "Description": "Public IP Address for the Web Server"
+    },
+    "RolesEnabled": {
+      "Value": {
+        "Ref": "Roles"
+      },
+      "Description": "Roles enabled on this instance."
+    },
+    "FeaturesEnabled": {
+      "Value": {
+        "Ref": "Features"
+      },
+      "Description": "Features enabled on this instance."
+    },
+    "DataVolumeID": {
+      "Description": "ID of the Data Volume attached to the instance",
+      "Value": {
+        "Ref": "DataVolume"
+      }
+    },
+    "WebServerID": {
+      "Description": "ID of the WebServer instance",
+      "Value": {
+        "Ref": "WebServer"
+      }
+    }
+  }
+}
