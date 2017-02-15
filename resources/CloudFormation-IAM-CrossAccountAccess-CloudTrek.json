@@ -10,16 +10,7 @@
     "AccountID": {
       "Description": "The ID of the AWS Account to add in the CrossAccount setup",
       "Type": "String",
-      "Default": "077134902660"
-    },
-    "RequireMFA": {
-      "Description": "Boolean option as to allow or deny access to MFA enabled devices",
-      "Type": "String",
-      "Default":"True",
-      "AllowedValues":[
-        "True",
-        "False"
-      ]
+      "Default": "arn:aws:iam::077134902660:root"
     },
     "AttachedPolicy": {
       "Description": "The policy to attach the CloudTrek Cross Account IAM role",
@@ -32,14 +23,19 @@
       "Type":"AWS::IAM::Role",
       "Properties": {
         "AssumeRolePolicyDocument": {
-          "Version" : "2012-10-17",
-          "Statement": [ {
-            "Effect": "Allow",
-            "Principal": {
-              "Service": [ {"Ref":"AccountID"}]
-            },
-            "Action": [ "sts:AssumeRole" ]
-          } ]
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Ref":"AccountID"
+                }
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
         },
         "Path": "/",
         "ManagedPolicyArns":[
