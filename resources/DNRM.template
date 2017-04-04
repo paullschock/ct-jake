@@ -1,0 +1,656 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "A CloudFormation template created by CloudTrek for image conversion",
+  "Parameters": {
+    "PackageBucket": {
+      "Description": "The S3 bucket where the Elastic Beanstalk worker code is",
+      "Type": "String"
+    },
+    "InputS3Bucket": {
+      "Description": "The S3 bucket where initial images are placed before conversion",
+      "Type": "String"
+    },
+    "CreateInputS3Bucket": {
+      "Description": "A boolean option to create a new bucket for input purposes",
+      "Type": "String",
+      "Default": "False",
+      "AllowedValues": [
+        "True",
+        "False"
+      ]
+    },
+    "OutputS3Bucket": {
+      "Description": "The s3 bucket where images are placed after conversion",
+      "Type": "String"
+    },
+    "CreateOutputS3Bucket": {
+      "Description": "A boolean to create a new bucket for output purposes",
+      "Type": "String",
+      "Default": "False",
+      "AllowedValues": [
+        "True",
+        "False"
+      ]
+    },
+    "EnableVersioning": {
+      "Type": "String",
+      "Description": "An option to enable versioning on the files in the S3 bucket",
+      "Default": "Suspended",
+      "AllowedValues": [
+        "Suspended",
+        "Enabled"
+      ]
+    },
+    "S3Package": {
+      "Description": "The name of the application in the S3 bucket including the file extension ",
+      "Type": "String"
+    },
+    "VpcId":{
+      "Type":"AWS::EC2::VPC::Id",
+      "Description":"VpcId of your existing Virtual Private Cloud (VPC)"
+    },
+    "MinSize": {
+      "Description": "The minimum number of EC2 instances in Elastic Beanstalk",
+      "Default": "1",
+      "Type": "String"
+    },
+    "Subnets":{
+      "Description":"The Subnets to deploy the EC2 instances into",
+      "Type":"List<AWS::EC2::Subnet::Id>"
+    },
+    "MaxSize": {
+      "Description": "The minimum number of instances in Elastic Beanstalk",
+      "Default": "2",
+      "Type": "String"
+    },
+    "Platform": {
+      "Description": "The platform which the EB stack will run off of",
+      "Default": "python2.7",
+      "Type": "String"
+    },
+    "IAMRole": {
+      "Description": "The IAM Role to attach to the EB instances",
+      "Default":"aws-elasticbeanstalk-ec2-role",
+      "Type": "String"
+    },
+    "SecurityGroups":{
+      "Description":"The Security groups to apply to the EC2 instances",
+      "Type":"List<AWS::EC2::SecurityGroup::Id>"
+    },
+    "URLforProcessing":{
+      "Description":"The relative path to the application to which HTTP POST messages are sent",
+      "Type":"String",
+      "Default":"/"
+    },
+    "MIMEType":{
+      "Description":"The MIME type of the message sent in the HTTP POST request to the worker",
+      "Type":"String",
+      "Default":"application/json"
+    },
+    "InstanceType": {
+      "Description": "The option to chose the EC2 instance type",
+      "Type": "String",
+      "Default": "t2.micro",
+      "AllowedValues": [
+        "t2.micro",
+        "t2.small",
+        "t2.medium",
+        "t2.large",
+        "m3.medium",
+        "m3.large",
+        "m3.xlarge",
+        "m3.2xlarge"
+      ],
+      "ConstraintDescription": "must be a valid EC2 instance type."
+    },
+    "Name": {
+      "Description": "The Name tag to assign to all AWS resources",
+      "AllowedPattern": "[a-z0-9]{2,20}",
+      "Type": "String"
+    },
+    "EnvironmentTag": {
+      "Description": "The Environment tag to assign to all AWS resources",
+      "Type": "String",
+      "MinLength": "3",
+      "MaxLength": "255"
+    },
+    "BusinessUnit": {
+      "Description": "The Business Unit tag to assign to all AWS resources",
+      "Type": "String",
+      "MinLength": "3",
+      "MaxLength": "255"
+    },
+    "CostCode": {
+      "Description": "The Cost Code tag to assign to all AWS resources",
+      "Type": "String",
+      "MinLength": "3",
+      "MaxLength": "255"
+    },
+    "System": {
+      "Description": "The System tag to assign to all AWS resource",
+      "Type": "String",
+      "MinLength": "3",
+      "MaxLength": "255"
+    },
+    "ApprovingOfficer": {
+      "Description": "The Approving Officer tag to assign to all AWS resources",
+      "Type": "String",
+      "MinLength": "3",
+      "MaxLength": "255"
+    }
+  },
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "DNRM Elastic Beanstalk Image Conversion Configuration"
+          },
+          "Parameters": [
+            "MinSize",
+            "MaxSize",
+            "InstanceType",
+            "IAMRole",
+            "Platform",
+            "MIMEType",
+            "URLforProcessing"
+          ]
+        },
+        {
+          "Label": {
+            "default": "S3 Configuration"
+          },
+          "Parameters": [
+            "CreateInputS3Bucket",
+            "InputS3Bucket",
+            "CreateOutputS3Bucket",
+            "OutputS3Bucket",
+            "EnableVersioning",
+            "PackageBucket",
+            "S3Package"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Network Configuration"
+          },
+          "Parameters": [
+            "VpcId",
+            "Subnets",
+            "SecurityGroups"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Tag Configuration"
+          },
+          "Parameters": [
+            "Name",
+            "ApprovingOfficer",
+            "BusinessUnit",
+            "CostCode",
+            "EnvironmentTag",
+            "System"
+          ]
+        }
+      ],
+      "ParameterLabels": {
+        "VpcId": {
+          "default": "VPC ID"
+        },
+        "PackageBucket": {
+          "default": "S3 Bucket with the application "
+        },
+        "InputS3Bucket": {
+          "default": "S3 Input Bucket"
+        },
+        "CreateInputS3Bucket": {
+          "default": "Create S3 Input Bucket?"
+        },
+        "CreateOutputS3Bucket": {
+          "default": "Create S3 Output Bucket?"
+        },
+        "OutputS3Bucket": {
+          "default": "S3 Output Bucket"
+        },
+        "EnableVersioning": {
+          "default": "Enable Versioning "
+        },
+        "S3Package": {
+          "default": "Application name"
+        },
+        "MinSize": {
+          "default": "Minimum number of EC2 Instances"
+        },
+        "MaxSize": {
+          "default": "Maximum number of EC2 Instances"
+        },
+        "Platform": {
+          "default": "The application platform language"
+        },
+        "Subnets": {
+          "default": "EC2 Subnets"
+        },
+        "IAMRole": {
+          "default": "EC2 IAM Role"
+        },
+        "SecurityGroups": {
+          "default": "EC2 Security Groups"
+        },
+        "URLforProcessing": {
+          "default": "URL for EB Processing"
+        },
+        "MIMEType": {
+          "default": "MIME type for EB"
+        },
+        "InstanceType": {
+          "default": "EC2 Instance Type"
+        },
+        "Name": {
+          "default": "Name tag"
+        },
+        "EnvironmentTag": {
+          "default": "Environment tag"
+        },
+        "BusinessUnit": {
+          "default": "Business Unit tag"
+        },
+        "CostCode": {
+          "default": "Cost Code tag"
+        },
+        "System": {
+          "default": "System tag"
+        },
+        "ApprovingOfficer": {
+          "default": "Approving Officer tag"
+        }
+      }
+    }
+  },
+  "Conditions": {
+    "NewInputBucket": {
+      "Fn::Equals": [
+        {
+          "Ref": "CreateInputS3Bucket"
+        },
+        "True"
+      ]
+    },
+    "NewOutputBucket": {
+      "Fn::Equals": [
+        {
+          "Ref": "CreateOutputS3Bucket"
+        },
+        "True"
+      ]
+    }
+  },
+
+  "Resources": {
+    "S3BucketA": {
+      "Type": "AWS::S3::Bucket",
+      "Condition": "NewInputBucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Join":["-",
+            [
+              {
+                "Ref":"Name"
+              },
+            "input-bucket"
+            ]
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  {
+                    "Ref": "Name"
+                  },
+                  "Input",
+                  "Images"
+                ]
+              ]
+            }
+          },
+          {
+            "Key": "EnvironmentTag",
+            "Value": {
+              "Ref": "EnvironmentTag"
+            }
+          },
+          {
+            "Key": "BusinessUnit",
+            "Value": {
+              "Ref": "BusinessUnit"
+            }
+          },
+          {
+            "Key": "CostCode",
+            "Value": {
+              "Ref": "CostCode"
+            }
+          },
+          {
+            "Key": "System",
+            "Value": {
+              "Ref": "System"
+            }
+          },
+          {
+            "Key": "ApprovingOfficer",
+            "Value": {
+              "Ref": "ApprovingOfficer"
+            }
+          }
+        ],
+        "VersioningConfiguration": {
+          "Status": {
+            "Ref": "EnableVersioning"
+          }
+        }
+      },
+      "DeletionPolicy": "Retain"
+    },
+    "S3BucketB": {
+      "Type": "AWS::S3::Bucket",
+      "Condition": "NewOutputBucket",
+      "Properties": {
+        "BucketName":  {
+          "Fn::Join":["-",
+            [
+              {
+                "Ref":"Name"
+              },
+              "output-bucket"
+            ]
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  {
+                    "Ref": "Name"
+                  },
+                  "Output",
+                  "Images"
+                ]
+              ]
+            }
+          },
+          {
+            "Key": "EnvironmentTag",
+            "Value": {
+              "Ref": "EnvironmentTag"
+            }
+          },
+          {
+            "Key": "BusinessUnit",
+            "Value": {
+              "Ref": "BusinessUnit"
+            }
+          },
+          {
+            "Key": "CostCode",
+            "Value": {
+              "Ref": "CostCode"
+            }
+          },
+          {
+            "Key": "System",
+            "Value": {
+              "Ref": "System"
+            }
+          },
+          {
+            "Key": "ApprovingOfficer",
+            "Value": {
+              "Ref": "ApprovingOfficer"
+            }
+          }
+        ],
+        "VersioningConfiguration": {
+          "Status": {
+            "Ref": "EnableVersioning"
+          }
+        }
+      },
+      "DeletionPolicy": "Retain"
+    },
+    "Application": {
+      "Type": "AWS::ElasticBeanstalk::Application",
+      "Properties": {
+        "Description": "DNRM Python Image Conversion application"
+      }
+    },
+    "ApplicationVersion": {
+      "Type": "AWS::ElasticBeanstalk::ApplicationVersion",
+      "Properties": {
+        "ApplicationName": {
+          "Ref": "Application"
+        },
+        "Description": "DNRM Application Version",
+        "SourceBundle": {
+          "S3Bucket": {
+            "Ref": "PackageBucket"
+          },
+          "S3Key": {
+            "Ref": "S3Package"
+          }
+        }
+      }
+    },
+    "ConfigurationTemplate":{
+      "Type":"AWS::ElasticBeanstalk::ConfigurationTemplate",
+      "Properties":{
+        "ApplicationName":{
+          "Ref":"Application"
+        },
+        "Description":"AWS ElasticBeanstalk Compute Configuration Template",
+        "OptionSettings":[
+          {
+            "Namespace":"aws:autoscaling:asg",
+            "OptionName":"MinSize",
+            "Value":{
+              "Ref":"MinSize"
+            }
+          },
+          {
+            "Namespace":"aws:autoscaling:asg",
+            "OptionName":"MaxSize",
+            "Value":{
+              "Ref":"MaxSize"
+            }
+          },
+          {
+            "Namespace":"aws:autoscaling:launchconfiguration",
+            "OptionName":"IamInstanceProfile",
+            "Value":{
+              "Ref":"IAMRole"
+            }
+          },
+          {
+            "Namespace":"aws:autoscaling:launchconfiguration",
+            "OptionName":"InstanceType",
+            "Value":{
+              "Ref":"InstanceType"
+            }
+          },
+          {
+            "Namespace":"aws:autoscaling:launchconfiguration",
+            "OptionName":"SecurityGroups",
+            "Value":{
+              "Fn::Join":[
+                ",",
+                {
+                  "Ref":"SecurityGroups"
+                }
+              ]
+            }
+          },
+          {
+            "Namespace":"aws:autoscaling:launchconfiguration",
+            "OptionName":"RootVolumeType",
+            "Value":"gp2"
+          },
+          {
+            "Namespace":"aws:ec2:vpc",
+            "OptionName":"VPCId",
+            "Value":{
+              "Ref":"VpcId"
+            }
+          },
+          {
+            "Namespace":"aws:ec2:vpc",
+            "OptionName":"Subnets",
+            "Value":{
+              "Fn::Join":[
+                ",",
+                {
+                  "Ref":"Subnets"
+                }
+              ]
+            }
+          },
+          {
+            "Namespace":"aws:ec2:vpc",
+            "OptionName":"AssociatePublicIpAddress",
+            "Value":"true"
+          },
+          {
+            "Namespace":"aws:elasticbeanstalk:environment",
+            "OptionName":"EnvironmentType",
+            "Value":"LoadBalanced"
+          },
+          {
+            "Namespace":"aws:elasticbeanstalk:sqsd",
+            "OptionName":"HttpPath",
+            "Value":{
+              "Ref":"URLforProcessing"
+            }
+          },
+          {
+            "Namespace":"aws:elasticbeanstalk:sqsd",
+            "OptionName":"MimeType",
+            "Value":{
+              "Ref":"MIMEType"
+            }
+          }
+        ],
+        "SolutionStackName": "64bit Amazon Linux 2016.09 v2.3.2 running Python 2.7"
+      }
+    },
+    "Environment": {
+      "Type": "AWS::ElasticBeanstalk::Environment",
+      "Properties": {
+        "ApplicationName": {
+          "Ref": "Application"
+        },
+        "Description": "Application Environment",
+        "EnvironmentName": {
+          "Ref": "Name"
+        },
+        "TemplateName": {
+          "Ref": "ConfigurationTemplate"
+        },
+        "VersionLabel": {
+          "Ref": "ApplicationVersion"
+        },
+        "Tier": {
+          "Name": "Worker",
+          "Type": "SQS/HTTP"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "eb",
+                  {
+                    "Ref": "System"
+                  },
+                  {
+                    "Ref": "EnvironmentTag"
+                  },
+                  "publicweb"
+                ]
+              ]
+            }
+          },
+          {
+            "Key": "EnvironmentTag",
+            "Value": {
+              "Ref": "EnvironmentTag"
+            }
+          },
+          {
+            "Key": "BusinessUnit",
+            "Value": {
+              "Ref": "BusinessUnit"
+            }
+          },
+          {
+            "Key": "CostCode",
+            "Value": {
+              "Ref": "CostCode"
+            }
+          },
+          {
+            "Key": "System",
+            "Value": {
+              "Ref": "System"
+            }
+          },
+          {
+            "Key": "ApprovingOfficer",
+            "Value": {
+              "Ref": "ApprovingOfficer"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "URL": {
+      "Description": "The URL of the Elastic Beanstalk EnvironmentTag",
+      "Value": {
+        "Fn::Join": [
+          "",
+          [
+            "http://",
+            {
+              "Fn::GetAtt": [
+                "Environment",
+                "EndpointURL"
+              ]
+            }
+          ]
+        ]
+      }
+    },
+
+    "S3InputBucketName": {
+      "Description": "Resource name of the input S3 bucket",
+      "Value": {
+        "Ref": "InputS3Bucket"
+      }
+    },
+    "S3OutBucketName": {
+      "Description": "Resource name of the output S3 bucket",
+      "Value": {
+        "Ref": "OutputS3Bucket"
+      }
+    }
+  }
+}
