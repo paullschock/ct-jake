@@ -1,6 +1,6 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "A CloudFormation template created by CloudTrek for image conversion",
+  "Description": "A CloudFormation template created by CloudTrek for DNRM for image conversion using AWS' EB, EC2, SQS, S3 and CloudWatch",
   "Parameters": {
     "PackageBucket": {
       "Description": "The S3 bucket where the Elastic Beanstalk worker code is",
