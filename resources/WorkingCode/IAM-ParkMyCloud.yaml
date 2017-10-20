@@ -1,0 +1,58 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: IAM Role for ParkMyCloud
+Parameters:
+  RoleName:
+    Description: The name for the IAM Role
+    Type: String
+    Default: ParkMyCloud
+  ExternalAccountNumber:
+    Description: The Account number to allow
+    Type: String
+    Default: 753542375798
+  ExternalID:
+    Description: The External ID to allow
+    Type: String
+    Default: 9506ce1715f7402a8923dab1f92c7ef0
+Resources:
+  ManagedPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: ReadOnly policy for ParkMyCloud
+      Path: "/"
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - iam:GetUser
+          - aws-portal:ViewUsage
+          - ec2:Describe*
+          - ec2:StartInstances
+          - ec2:StopInstances
+          - autoscaling:Describe*
+          - autoscaling:UpdateAutoScalingGroup
+          - autoscaling:SuspendProcesses
+          - autoscaling:ResumeProcesses
+          - rds:DescribeDBInstances
+          - rds:ListTagsForResource
+          - rds:StartDBInstance
+          - rds:StopDBInstance
+          Resource: "*"
+  Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          Effect: Allow
+          Principal:
+            AWS: !Join ["", [ "arn:aws:iam::", !Ref ExternalAccountNumber, ":root" ] ]
+          Action: sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns:
+      - !Ref ManagedPolicy
+      RoleName: !Ref RoleName
+Outputs:
+  RoleARN:
+    Description: The ARN of the Role
+    Value: !GetAtt Role.Arn
