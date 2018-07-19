@@ -1,0 +1,759 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS Cloudformation template for deploying Active Directory Service or EC2 AD Servers
+Parameters:
+
+
+#Prerequisites*
+# Make sure the VPC and NACL / SG Template has been run
+# Make sure to create the EC2 KeyPair before proceeding with this template
+# Make sure the Windows Lookup package is included in the S3 bucket
+
+#Type of directory to deploy
+  DirectoryType:
+    Description: The Type of Active Directory to use
+    Type: String
+    AllowedValues:
+    - MicrosoftAD
+    - SimpleAD
+    - EC2Instance
+# Network Configuration for Active Directory
+  VPC:
+    Description: VPC ID for Network Security Resources
+    Type: AWS::EC2::VPC::Id
+  AvailabilityZone:
+    Description: The Availability zone to deploy instance into.
+    Type: AWS::EC2::AvailabilityZone::Name
+    Default: ap-southeast-2a
+  SubnetManagementAId:
+    Description: Subnet ID for Management A
+    Type: AWS::EC2::Subnet::Id
+  SubnetManagementBId:
+    Description: Subnet ID for Management B
+    Type: AWS::EC2::Subnet::Id
+# Domain Details
+  FQDName:
+    Description: The Fully Qualified Domain name to use with managed AD, exmple.corp.com
+    Type: String
+  SecurePassword:
+    Description: Microsoft AD Password
+    Type: String
+    NoEcho: True
+#Lambda role for Windows lookup
+  S3BuildBucket:
+    Description: The S3 Bucket name containing the build files.
+    Type: String
+  S3Key:
+    Description: Name of the .zip package including the file extention.
+    Type: String
+    Default: amilookup-win.zip
+  WindowsVersion:
+    Description: Version of Windows to build.
+    Type: String
+    Default: Windows Server 2016 English 64-bit
+    AllowedValues:
+    - Windows Server 2008 SP2 English 32-bit
+    - Windows Server 2008 SP2 English 64-bit
+    - Windows Server 2008 R2 English 64-bit
+    - Windows Server 2012 RTM English 64-bit
+    - Windows Server 2012 R2 English 64-bit
+    - Windows Server 2016 English 64-bit
+  ModuleName:
+    Description: Name of the JavaScript file to perform the AMI lookup.
+    Type: String
+    Default: amilookup-win
+# IAM Configuration
+  AmazonEC2RoleforSSMARN:
+    Description: The IAM ARN for the AWS Policy AmazonEC2RoleforSSM
+    Type: String
+    Default: arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
+  AmazonSSMFullAccessARN:
+    Description: The IAM ARN for the AWS Policy AmazonSSMFullAccess
+    Type: String
+    Default: arn:aws:iam::aws:policy/AmazonSSMFullAccess
+  AWSCloudFormationReadOnlyAccessARN:
+    Description: The IAM ARN for the AWS Policy CloudFormationReadOnlyAccess
+    Type: String
+    Default: arn:aws:iam::aws:policy/AWSCloudFormationReadOnlyAccess
+  CloudWatchFullAccessARN:
+    Description: The IAM ARN for the AWS Policy CloudWatchFullAccess
+    Type: String
+    Default: arn:aws:iam::aws:policy/CloudWatchFullAccess
+# Backup Bucket
+  EnableVersioning:
+    Type: String
+    Description: An option to enable versioning on the files in the S3 bucket
+    Default: Suspended
+    AllowedValues:
+    - Suspended
+    - Enabled
+  BackupBucketName:
+    Type: String
+    Description: The name of the bucket to be used with backups
+    Default: somelowecasebucketname
+# Instance Configuration
+  KeyPairName:
+    Description: The name of an existing Amazon EC2 key pair for remote access.
+    Type: AWS::EC2::KeyPair::KeyName
+  ServerSecurityGroup:
+    Description: The Security Groups to attach to the Instance.
+    Type: List<AWS::EC2::SecurityGroup::Id>
+  InstanceType:
+    Description: The Amazon EC2 instance type.
+    Type: String
+    Default: t2.large
+    AllowedValues:
+    - t2.micro
+    - t2.medium
+    - t2.large
+    - r4.large
+    - r4.xlarge
+    - m4.large
+    - m4.xlarge
+    - c4.large
+    - c4.xlarge
+  Location:
+    Description: The city to have applied to the instance on bootstrap.
+    Type: String
+    Default: BNE
+    AllowedValues:
+    - AKL
+    - BNE
+    - SYD
+    - CBR
+    - MEL
+    - HBA
+    - ADL
+    - DRW
+    - PER
+    - DPS
+    - SIN
+    - LON
+# Volume configurations
+  VolumeEncryption:
+    Description: A boolean option on whether to use EBS Volume encryption.
+    Type: String
+    Default: 'true'
+    AllowedValues:
+    - 'true'
+    - 'false'
+  OSVolumeSize:
+    Description: The OS volume size (C drive) in Gb.
+    Type: String
+    Default: '50'
+    AllowedPattern: "\\d{2,5}"
+    ConstraintDescription: Volume size must be an integer
+  OSVolumeType:
+    Description: Type of the OS volume.
+    Type: String
+    Default: gp2
+    AllowedValues:
+    - standard
+    - gp2
+  DataVolumeSize:
+    Description: The Data volume size (D drive) in Gb.
+    Type: String
+    Default: '10'
+    AllowedPattern: "\\d{2,5}"
+    ConstraintDescription: Data volume Size must be an integer
+  DataVolumeType:
+    Description: Type of the Data volume.
+    Type: String
+    Default: gp2
+    AllowedValues:
+    - standard
+    - io1
+    - gp2
+# Tagging specific configurations
+  Name:
+    Description: The Name Tag to apply to all resources
+    Type: String
+    MinLength: '3'
+    MaxLength: '255'
+  Project:
+    Description: The Project Tag to apply to all resources
+    Type: String
+    MinLength: '3'
+    MaxLength: '255'
+  Application:
+    Description: The Application Tag to apply to all resources
+    Type: String
+    MinLength: '3'
+    MaxLength: '255'
+  Environment:
+    Description: A Tag to differenciate the environment
+    Type: String
+    MinLength: '3'
+    MaxLength: '255'
+    Default: Production
+    AllowedValues:
+    - Production
+    - Dev/Test
+    - UAT
+Conditions:
+  IsSimpleManagedAD: !Equals [ !Ref DirectoryType, SimpleAD ]
+  IsFullManagedAD: !Equals [ !Ref DirectoryType, MicrosoftAD ]
+  IsEC2AD: !Equals [ !Ref DirectoryType, EC2Instance ]
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: Directory Type
+      Parameters:
+      - DirectoryType
+    - Label:
+        default: Network Configuration
+      Parameters:
+      - VPC
+      - SubnetManagementAId
+      - SubnetManagementBId
+    - Label:
+        default: Domain Details
+      Parameters:
+      - FQDName
+      - SecurePassword
+    - Label:
+        default: AMI Lambda Configurations
+      Parameters:
+      - S3BuildBucket
+      - S3Key
+      - ModuleName
+      - WindowsVersion
+    - Label:
+        default: VPC Configuration
+      Parameters:
+      - AvailabilityZone
+      - ServerSecurityGroup
+    - Label:
+        default: AWS Policies
+      Parameters:
+      - AmazonEC2RoleforSSMARN
+      - AmazonSSMFullAccessARN
+      - AWSCloudFormationReadOnlyAccessARN
+      - CloudWatchFullAccessARN
+    - Label:
+        default: EC2 Configuration
+      Parameters:
+      - InstanceType
+      - KeyPairName
+      - Location
+    - Label:
+        default: EBS Configuration
+      Parameters:
+      - OSVolumeSize
+      - OSVolumeType
+      - DataVolumeSize
+      - DataVolumeType
+      - VolumeEncryption
+    - Label:
+        default: Backup Bucket Configuration
+      Parameters:
+      - EnableVersioning
+      - BackupBucketName
+    - Label:
+        default: Tagging Configurations
+      Parameters:
+      - Name
+      - Environment
+      - Application
+      - Project
+Mappings:
+  AvailabilityZones:
+    ap-southeast-2:
+      ZoneA: ap-southeast-2a
+      ZoneB: ap-southeast-2b
+      ZoneC: ap-southeast-2c
+  defaultSettings:
+    timezone:
+      AKL: New Zealand Standard Time
+      BNE: E. Australia Standard Time
+      SYD: AUS Eastern Standard Time
+      CBR: AUS Eastern Standard Time
+      MEL: AUS Eastern Standard Time
+      HBA: Tasmania Standard Time
+      ADL: Cen. Australia Standard Time
+      DRW: AUS Eastern Standard Time
+      PER: W. Australia Standard Time
+      DPS: SE Asia Standard Time
+      SIN: Singapore Standard Time
+      LON: GMT Standard Time
+    region:
+      AKL: New Zealand
+      BNE: Australia
+      SYD: Australia
+      CBR: Australia
+      MEL: Australia
+      HBA: Australia
+      ADL: Australia
+      DRW: Australia
+      PER: Australia
+      DPS: Indonesian
+      SIN: Singapore
+      LON: United Kingdom
+Resources:
+  SimpleDirectory:
+    Condition: IsSimpleManagedAD
+    Type: "AWS::DirectoryService::SimpleAD"
+    Properties:
+      Name:
+        Ref: FQDName
+      Password:
+        Ref: SecurePassword
+      Size: Small
+      VpcSettings:
+        SubnetIds:
+          - Ref: SubnetManagementAId
+          - Ref: SubnetManagementBId
+        VpcId:
+          Ref: VPC
+  ManagedDirectory:
+    Condition: IsFullManagedAD
+    Type: "AWS::DirectoryService::MicrosoftAD"
+    Properties:
+      Name:
+        Ref: FQDName
+      Password:
+        Ref: SecurePassword
+      VpcSettings:
+        SubnetIds:
+          - Ref: SubnetManagementAId
+          - Ref: SubnetManagementBId
+        VpcId:
+          Ref: VPC
+  DataVolume:
+    Condition: IsEC2AD
+    Type: AWS::EC2::Volume
+    DeletionPolicy: Snapshot
+#    DeletionPolicy: !If [CreateProdResources, Snapshot, Delete]
+    Properties:
+      AvailabilityZone: !Ref AvailabilityZone
+      Encrypted: !Ref VolumeEncryption
+      Size: !Ref DataVolumeSize
+      VolumeType: !Ref DataVolumeType
+      Tags:
+      - Key: Name
+        Value: !Sub ${Application}-Data-Volume
+      - Key: Application
+        Value: !Ref Application
+      - Key: Project
+        Value: !Ref Project
+      - Key: Environment
+        Value: !Ref Environment
+  S3Bucket:
+    Condition: IsEC2AD
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${Application}-backup
+      Tags:
+      - Key: Name
+        Value: !Sub ${Application}-${Project}-Bucket
+      - Key: Application
+        Value: !Ref Application
+      - Key: Project
+        Value: !Ref Project
+      - Key: Environment
+        Value: !Ref Environment
+      VersioningConfiguration:
+        Status:
+          Ref: EnableVersioning
+    DeletionPolicy: Retain
+#Lambda function to lookup latest AMI in region
+  LambdaExecutionRole:
+      Condition: IsEC2AD
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: "Allow"
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+              Action:
+                - sts:AssumeRole
+        Path: "/"
+        Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              Resource: arn:aws:logs:*:*:*
+            - Effect: Allow
+              Action:
+              - ec2:DescribeImages
+              Resource: "*"
+  AMIInfoFunction:
+      Condition: IsEC2AD
+      Type: AWS::Lambda::Function
+      DependsOn: LambdaExecutionRole
+      Properties:
+        Code:
+          S3Bucket: !Ref S3BuildBucket
+          S3Key: !Ref S3Key
+        Handler: !Sub "${ModuleName}.handler"
+        Role: !GetAtt LambdaExecutionRole.Arn
+        Runtime: nodejs4.3
+        Timeout: 30
+  AMIInfo:
+      Condition: IsEC2AD
+      Type: Custom::AMIInfo
+      Properties:
+        ServiceToken: !Sub ${AMIInfoFunction.Arn}
+        Region: !Ref "AWS::Region"
+        OSName: !Ref WindowsVersion
+# IAM Resource
+  InstancePolicy:
+    Condition: IsEC2AD
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: IAM Policy for the Server Instance
+      Path: "/"
+      PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+              - S3:GetObjectAcl
+              - s3:ListBucket
+              - s3:PutObject
+              - s3:GetBucketLocation
+              - s3:RestoreObject
+              - s3:ListAllMyBuckets
+              - s3:CreateBucket
+              - s3:GetBucketAcl
+              - s3:GetBucketVersioning
+              - s3:GetBucketPolicy
+            Resource:
+              - !Join [ "", [ "arn:aws:s3:::", !Ref S3BuildBucket ] ]
+              - !Join [ "", [ "arn:aws:s3:::", !Ref S3BuildBucket, "/*" ]]
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:ListBucket
+              - s3:PutObject
+              - s3:ListAllMyBuckets
+            Resource:
+              - !Join [ "", [ "arn:aws:s3:::", !Ref S3Bucket ] ]
+              - !Join [ "", [ "arn:aws:s3:::", !Ref S3Bucket, "/*" ]]
+          - Effect: Allow
+            Action:
+            - cloudformation:SignalResource
+            - cloudformation:DescribeStackResource
+            - cloudformation:CreateStack
+            - cloudformation:DescribeStacks
+            - cloudformation:DescribeStackEvents
+            - cloudformation:GetTemplate
+            - cloudformation:ValidateTemplate
+            - cloudformation:ListStacks
+            - cloudformation:ListStackResources
+            Resource: "*"
+          - Sid: MetricsAccess
+            Action:
+              - cloudwatch:PutMetricData
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:DescribeLogGroups
+              - logs:DescribeLogStreams
+              - logs:PutLogEvents
+            Effect: Allow
+            Resource: "*"
+          - Sid: CloudformationLookup
+            Action:
+              - cloudformation:DescribeStackResources
+              - cloudformation:SignalResource
+              - cloudformation:ListStackResources
+              - cloudformation:DescribeStackResource
+              - cloudformation:DescribeStacks
+            Resource: "*"
+            Effect: Allow
+  IAMRole:
+      Condition: IsEC2AD
+      Type: AWS::IAM::Role
+      DependsOn:
+      - InstancePolicy
+      Properties:
+          AssumeRolePolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                  - Effect: Allow
+                    Principal:
+                      Service: ec2.amazonaws.com
+                    Action: sts:AssumeRole
+          Path: "/"
+          ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
+          - arn:aws:iam::aws:policy/AmazonSSMFullAccess
+          - !Ref InstancePolicy
+          - !Ref AWSCloudFormationReadOnlyAccessARN
+          - !Ref CloudWatchFullAccessARN
+  InstanceProfile:
+      Type: AWS::IAM::InstanceProfile
+      Condition: IsEC2AD
+      DependsOn:
+      - IAMRole
+      Properties:
+          Path: "/"
+          Roles:
+          - Ref: IAMRole
+# EC2 Resource
+  EC2Instance:
+    Condition: IsEC2AD
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone: !Ref AvailabilityZone
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref InstanceProfile
+      ImageId: !GetAtt AMIInfo.Id
+      Volumes:
+      - VolumeId: !Ref DataVolume
+      InstanceInitiatedShutdownBehavior: stop
+      BlockDeviceMappings:
+      - DeviceName: "/dev/sda1"
+        Ebs:
+          VolumeType: !Ref OSVolumeType
+          DeleteOnTermination: 'true'
+          VolumeSize: !Ref OSVolumeSize
+      SecurityGroupIds: !Ref ServerSecurityGroup
+      SubnetId: !Ref SubnetManagementAId
+      KeyName: !Ref KeyPairName
+      Tags:
+      - Key: Name
+        Value: !Sub ${Application}-Server
+      - Key: Application
+        Value: !Ref Application
+      - Key: Project
+        Value: !Ref Project
+      - Key: Environment
+        Value: !Ref Environment
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+          - ''
+          - - "<script>\n"
+            - 'cfn-init.exe -v -c config -s '
+            - Ref: AWS::StackId
+            - " -r EC2Instance"
+            - " --region "
+            - Ref: AWS::Region
+            - " --configsets config -v --role "
+            - Ref: IAMRole
+            - "\n"
+            - "</script>"
+    Metadata:
+      AWS::CloudFormation::Authentication:
+        RoleAccess:
+          roleName: !Ref IAMRole
+          type: S3
+          buckets:
+          - Ref: S3BuildBucket
+      AWS::CloudFormation::Init:
+        configSets:
+          config:
+          - CFNsetup
+          - InitDrives
+          - WindowsConfig
+          - Restart
+          - InstallChocolatey
+          - Restart
+          - ChocolateyApps
+          - RenameComputer
+          - Cleanup
+        CFNsetup:
+          files:
+            c:\cfn\cfn-hup.conf:
+              content:
+                Fn::Join:
+                - ''
+                - - "[main]\n"
+                  - stack=
+                  - Ref: AWS::StackId
+                  - "\n"
+                  - region=
+                  - Ref: AWS::Region
+                  - "\n"
+            c:\cfn\hooks.d\cfn-auto-reloader.conf:
+              content:
+                Fn::Join:
+                - ''
+                - - "[cfn-auto-reloader-hook]\n"
+                  - 'triggers=post.update'
+                  - 'path=Resources.DBServer.Metadata.AWS::CloudFormation::Init'
+                  - 'action=cfn-init.exe -v -s '
+                  - Ref: AWS::StackId
+                  - " -r EC2Instance"
+                  - " --region "
+                  - Ref: AWS::Region
+                  - " --configsets config -v --role "
+                  - Ref: IAMRole
+                  - " \n"
+          services:
+            windows:
+              cfn-hup:
+                enabled: 'true'
+                ensureRunning: 'true'
+                files:
+                - c:\cfn\cfn-hup.conf
+                - c:\cfn\hooks.d\cfn-auto-reloader.conf
+        InitDrives:
+          files:
+            C:\cfn\scripts\PSInitDrives.ps1:
+              content:
+                Fn::Join:
+                - ''
+                - - "param([Int32]$number=1,"
+                  - "\n [Int32]$blocksize=4096,"
+                  - "\n [String]$letter=\"\","
+                  - "\n [String]$label=\"\")"
+                  - "\n sleep -seconds 30"
+                  - "\n $osversion = (Get-WmiObject -class Win32_OperatingSystem).version"
+                  - "\n if ($osversion -gt 6.2){"
+                  - "\n if (Get-Disk -Number $number | Where partitionstyle -eq 'RAW') {"
+                  - "\n Initialize-Disk -Number $number -PartitionStyle MBR -PassThru -Confirm:$false | New-Partition -DriveLetter $letter -UseMaximumSize | Format-Volume -FileSystem NTFS -AllocationUnitSize $blocksize -NewFileSystemLabel $label -Confirm:$false"
+                  - "\n } else {"
+                  - "\n Clear-Disk -Number $number -Confirm:$false -PassThru -RemoveData | Initialize-Disk -PartitionStyle MBR -PassThru -Confirm:$false | New-Partition -DriveLetter $letter -UseMaximumSize | Format-Volume -FileSystem NTFS -AllocationUnitSize $blocksize -NewFileSystemLabel $label -Confirm:$false"
+                  - "\n }"
+                  - "\n }"
+                  - "\n else {"
+                  - "\n $script = @\"\nselect disk $number\nonline disk noerr\nattributes disk clear readonly noerr\ncreate partition primary noerr\nformat quick fs=NTFS label=\"$label\"\nassign letter=\"$letter\"\n\"@"
+                  - "\n $scriptdisk += $script + \"`n\""
+                  - "\n $scriptdisk | diskpart"
+                  - "\n }"
+          commands:
+            InitializeD:
+              command:
+                Fn::Join:
+                - ''
+                - - 'powershell.exe '
+                  - "-ExecutionPolicy"
+                  - " Unrestricted"
+                  - ' C:\cfn\scripts\PSInitDrives.ps1 -number 1 -letter D -label "Data"'
+              waitAfterCompletion: 0
+        WindowsConfig:
+          commands:
+            execute-powershell-scriptSetRegionSettings:
+              command:
+                Fn::Join:
+                - ''
+                - - 'powershell.exe -ExecutionPolicy '
+                  - 'Unrestricted '
+                  - C:\cfn\scripts\SetRegionSettings.ps1
+                  - " -timeZoneName '"
+                  - !FindInMap [defaultSettings, timezone, !Ref Location]
+                  - "' -locationName '"
+                  - !FindInMap [defaultSettings, region, !Ref Location]
+                  - "'"
+            SetTimeZone:
+              command:
+                Fn::Join:
+                - ''
+                - - "%windir%\\system32\\tzutil /s \""
+                  - !FindInMap [defaultSettings, timezone, !Ref Location]
+                  - "\""
+            SetCulture:
+              command:
+                Fn::Join:
+                - ''
+                - - 'powershell.exe '
+                  - "-ExecutionPolicy "
+                  - 'Unrestricted '
+                  - C:\cfn\scripts\SetCulture.ps1
+              waitAfterCompletion: '1'
+          files:
+            C:\cfn\scripts\SetCulture.ps1:
+              content:
+                Fn::Join:
+                - ''
+                - - Import-Module International
+                  - "\n"
+                  - Set-Culture en-AU
+                  - "\n"
+                  - Set-WinUserLanguageList en-AU -Force
+            C:\cfn\scripts\SetRegionSettings.ps1:
+              authentication: RoleAccess
+              source: !Sub 'https://s3-ap-southeast-2.amazonaws.com/${S3BuildBucket}/SetRegionSettings.ps1'
+        InstallChocolatey:
+          commands:
+            InstallChocoCmd:
+              command: '@powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((New-Object System.Net.WebClient).DownloadString(''https://chocolatey.org/install.ps1''))" && SET "PATH=%PATH%;%ALLUSERSPROFILE%\chocolatey\bin"'
+              waitAfterCompletion: '1'
+        Restart:
+          commands:
+            Restart:
+              command: shutdown -r -t 0
+              waitAfterCompletion: forever
+        ChocolateyApps:
+          commands:
+            7zip:
+              command: choco install 7zip -y
+              waitAfterCompletion: '1'
+            CloudBerry:
+              command: choco install cloudberryexplorer.s3 -y
+              waitAfterCompletion: '1'
+            AWSCLI:
+              command: choco install awscli -y
+              waitAfterCompletion: '1'
+            SSMS:
+              command: choco install sql-server-management-studio -y
+              waitAfterCompletion: '1'
+        RenameComputer:
+          files:
+            C:\cfn\scripts\RenameComputer.ps1:
+              content:
+                Fn::Join:
+                - ''
+                - - Rename-Computer -NewName '
+                  - Fn::Join:
+                    - ''
+                    - - Ref: Application
+                      - "' -Force -Verbose -Confirm:$false -Restart"
+          commands:
+            RenameComputer:
+              command:
+                Fn::Join:
+                - ''
+                - - 'powershell.exe '
+                  - "-ExecutionPolicy"
+                  - " Unrestricted"
+                  - " C:\\cfn\\scripts\\RenameComputer.ps1"
+              waitAfterCompletion: forever
+        Cleanup:
+          files:
+            C:\cfn\scripts\Cleanup.ps1:
+              content:
+                Fn::Join:
+                - ''
+                - - "Rename-Item -path C:\\cfn\\Scripts -newName Scripts_Old"
+          commands:
+            RemoveFutureProblems:
+              command:
+                Fn::Join:
+                 - ''
+                 - - 'powershell.exe '
+                   - "-ExecutionPolicy"
+                   - " Unrestricted"
+                   - " C:\\cfn\\scripts\\Cleanup.ps1"
+Outputs:
+  ServerPrivateIp:
+    Condition: IsEC2AD
+    Value:
+      Fn::GetAtt:
+      - EC2Instance
+      - PrivateIp
+    Description: Private IP Address for the Web Server
+  DataVolumeID:
+    Condition: IsEC2AD
+    Description: ID of the Data Volume attached to the instance
+    Value: !Ref DataVolume
+  ServerID:
+    Condition: IsEC2AD
+    Description: ID of the WebServer instance
+    Value: !Ref EC2Instance
+  S3Bucket:
+    Condition: IsEC2AD
+    Description: The Bucket that was created for this application server
+    Value: !Ref S3Bucket

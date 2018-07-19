@@ -1,0 +1,513 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: AWS Cloudformation template for deploying NAT Gateways or NAT Instances
+Parameters:
+# Route Table Configurations for AZ A
+  WebRouteTableA:
+    Description: The ID of the Web Route Table in AZ A
+    Type: String
+  AppRouteTableA:
+    Description: The ID of the Application Route Table in AZ A
+    Type: String
+  WorkspacesRouteTableA:
+    Description: The ID of the Workspaves Route Table in AZ A
+    Type: String
+  DataRouteTableA:
+    Description: The ID of the Data Route Table in AZ A
+    Type: String
+  ManagementRouteTableA:
+    Description: The ID of the Management Route Table in AZ A
+    Type: String
+# Route Table Configurations for AZ B
+  WebRouteTableB:
+    Description: The ID of the Web Route Table in AZ B
+    Type: String
+  AppRouteTableB:
+    Description: The ID of the Application Route Table in AZ B
+    Type: String
+  WorkspacesRouteTableB:
+    Description: The ID of the Workspaves Route Table in AZ B
+    Type: String
+  DataRouteTableB:
+    Description: The ID of the Data Route Table in AZ B
+    Type: String
+  ManagementRouteTableB:
+    Description: The ID of the Management Route Table in AZ B
+    Type: String
+# Route Table Configurations for AZ C
+  WebRouteTableC:
+    Description: The ID of the Web Route Table in AZ C
+    Type: String
+  AppRouteTableC:
+    Description: The ID of the Application Route Table in AZ C
+    Type: String
+  WorkspacesRouteTableC:
+    Description: The ID of the Workspaves Route Table in AZ C
+    Type: String
+  DataRouteTableC:
+    Description: The ID of the Data Route Table in AZ C
+    Type: String
+  ManagementRouteTableC:
+    Description: The ID of the Management Route Table in AZ C
+    Type: String
+# The Choice of NAT Instance
+  NATType:
+    Description: The Type of NAT to deploy for this environmnet.
+    Type: String
+    AllowedValues:
+    - Managed
+    - Unmanaged
+  DeployInAZA:
+    Description: The option to install NAT Gateways in all AZ A
+    Type: String
+    Default: True
+    AllowedValues:
+    - Yes
+    - No
+  DeployInAZB:
+    Description: The option to install NAT Gateways in all AZ B
+    Type: String
+    AllowedValues:
+    - Yes
+    - No
+  DeployInAZC:
+    Description: The option to install NAT Gateways in all AZ C
+    Type: String
+    AllowedValues:
+    - Yes
+    - No
+# Network Configuration for NAT Gateway or Instance
+  VPC:
+    Description: VPC ID for Network Security Resources
+    Type: AWS::EC2::VPC::Id
+  AvailabilityZone:
+    Description: The Availability zone to deploy instance into.
+    Type: AWS::EC2::AvailabilityZone::Name
+    Default: ap-southeast-2a
+  SubnetPublicAId:
+    Description: Subnet ID for Public A
+    Type: AWS::EC2::Subnet::Id
+  SubnetPublicBId:
+    Description: Subnet ID for Public B
+    Type: AWS::EC2::Subnet::Id
+  SubnetPublicCId:
+    Description: Subnet ID for Public C
+    Type: AWS::EC2::Subnet::Id
+# Instance Configuration for the NAT Instance
+  AMIId:
+    Description: The ID of the Amazon AMI to be used in the NAT Instance Creation
+    Type: String
+    Default: ami-37f82155
+  InstanceSecurityGroup:
+    Description: The Security Groups to attach to the Instance.
+    Type: List<AWS::EC2::SecurityGroup::Id>
+  InstanceType:
+    Description: The Amazon EC2 instance type.
+    Type: String
+    Default: t2.large
+    AllowedValues:
+    - t2.micro
+    - t2.medium
+    - t2.large
+    - r4.large
+    - r4.xlarge
+    - m4.large
+    - m4.xlarge
+    - c4.large
+    - c4.xlarge
+# Tagging specific configurations
+  Name:
+    Description: The Name Tag to apply to all resources
+    Type: String
+    MinLength: '3'
+    MaxLength: '255'
+  Project:
+    Description: The Project Tag to apply to all resources
+    Type: String
+    MinLength: '3'
+    MaxLength: '255'
+  Application:
+    Description: The Application Tag to apply to all resources
+    Type: String
+    MinLength: '3'
+    MaxLength: '255'
+  Environment:
+    Description: A Tag to differenciate the environment
+    Type: String
+    MinLength: '3'
+    MaxLength: '255'
+    Default: Production
+    AllowedValues:
+    - Production
+    - Dev/Test
+    - UAT
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: NAT Options
+      Parameters:
+      - NATType
+      - DeployInAZA
+      - DeployInAZB
+      - DeployInAZC
+    - Label:
+        default: VPC Configurations
+      Parameters:
+      - VPC
+      - InstanceSecurityGroup
+    - Label:
+        default: Route Configurations AZ A
+      Parameters:
+      - WebRouteTableA
+      - AppRouteTableA
+      - WorkspacesRouteTableA
+      - DataRouteTableA
+      - ManagementRouteTableA
+    - Label:
+        default: Route Configurations AZ B
+      Parameters:
+      - WebRouteTableB
+      - AppRouteTableB
+      - WorkspacesRouteTableB
+      - DataRouteTableB
+      - ManagementRouteTableB
+    - Label:
+        default: Route Configurations AZ C
+      Parameters:
+      - WebRouteTableC
+      - AppRouteTableC
+      - WorkspacesRouteTableC
+      - DataRouteTableC
+      - ManagementRouteTableC
+    - Label:
+        default: Managed NAT Configurations
+      Parameters:
+      - SubnetPublicAId
+      - SubnetPublicBId
+      - SubnetPublicCId
+    - Label:
+        default: Unmanaged NAT Configurations
+      Parameters:
+      - AvailabilityZone
+      - AMIId
+      - InstanceType
+    - Label:
+        default: Tagging Configurations
+      Parameters:
+      - Name
+      - Environment
+      - Application
+      - Project
+Mappings:
+  SubnetConfig:
+    VPC:
+      CIDR: 0.0/16
+    PublicA:
+      CIDR: 0.0/24
+    PublicB:
+      CIDR: 1.0/24
+    PublicC:
+      CIDR: 2.0/24
+    WebA:
+      CIDR: 3.0/24
+    WebB:
+      CIDR: 4.0/24
+    WebC:
+      CIDR: 5.0/24
+    AppA:
+      CIDR: 6.0/24
+    AppB:
+      CIDR: 7.0/24
+    AppC:
+      CIDR: 8.0/24
+    WorkspacesA:
+      CIDR: 9.0/24
+    WorkspacesB:
+      CIDR: 10.0/24
+    WorkspacesC:
+      CIDR: 11.0/24
+    DataA:
+      CIDR: 12.0/24
+    DataB:
+      CIDR: 13.0/24
+    DataC:
+      CIDR: 14.0/24
+    ManagementA:
+      CIDR: 15.0/24
+    ManagementB:
+      CIDR: 16.0/24
+    ManagementC:
+      CIDR: 17.0/24
+  AvailabilityZones:
+    ap-southeast-2:
+      ZoneA: ap-southeast-2a
+      ZoneB: ap-southeast-2b
+      ZoneC: ap-southeast-2c
+Conditions:
+  TypeOfNATGW: !Equals [!Ref NATType, Managed]
+  TypeOfNATInstance: !Equals [!Ref NATType, Unmanaged]
+  DeployInA: !Equals [!Ref DeployInAZA, Yes]
+  DeployInB: !Equals [!Ref DeployInAZB, Yes]
+  DeployInC: !Equals [!Ref DeployInAZC, Yes]
+Resources:
+# The EIP Resources
+  EIP:
+    Condition: DeployInA
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  EIPAssociation:
+    Condition: TypeOfNATInstance
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      EIP: !Ref EIP
+      InstanceId: !Ref NATInstance
+  EIPB:
+    Type: AWS::EC2::EIP
+    Condition: DeployInB
+    Properties:
+      Domain: vpc
+  EIPC:
+    Type: AWS::EC2::EIP
+    Condition: DeployInC
+    Properties:
+      Domain: vpc
+# The NAT Resources
+  NATGateWayA:
+    Condition: TypeOfNATGW
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+        - EIP
+        - AllocationId
+      SubnetId:
+        Ref: SubnetPublicAId
+      Tags:
+      - Key: Name
+        Value: NAT-Gateway-A
+      - Key: Application
+        Value: !Ref Application
+      - Key: Project
+        Value: !Ref Project
+      - Key: Environment
+        Value: !Ref Environment
+  NATGateWayB:
+    Condition: TypeOfNatGW
+    Condition: DeployInB
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+        - EIPB
+        - AllocationId
+      SubnetId:
+        Ref: SubnetPublicBId
+      Tags:
+      - Key: Name
+        Value: NAT-Gateway-B
+      - Key: Application
+        Value: !Ref Application
+      - Key: Project
+        Value: !Ref Project
+      - Key: Environment
+        Value: !Ref Environment
+  NATGateWayC:
+    Condition: TypeOfNatGW
+    Condition: DeployInC
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+        - EIPC
+        - AllocationId
+      SubnetId:
+        Ref: SubnetPublicCId
+      Tags:
+      - Key: Name
+        Value: NAT-Gateway-C
+      - Key: Application
+        Value: !Ref Application
+      - Key: Project
+        Value: !Ref Project
+      - Key: Environment
+        Value: !Ref Environment
+  NATInstance:
+    Condition: TypeOfNATInstance
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AMIId
+      AvailabilityZone: !Ref AvailabilityZone
+      SubnetId: !Ref SubnetPublicAId
+      SecurityGroupIds: !Ref InstanceSecurityGroup
+      InstanceType: !Ref InstanceType
+      InstanceInitiatedShutdownBehavior: stop
+      SourceDestCheck: false
+      Tags:
+      - Key: Name
+        Value: NAT-Instance
+      - Key: Application
+        Value: !Ref Application
+      - Key: Project
+        Value: !Ref Project
+      - Key: Environment
+        Value: !Ref Environment
+# The Routes if using Gateway in A
+  WebRouteGWA:
+    Condition: TypeOfNATGW
+    Condition: DeployInA
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref WebRouteTableA
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateWayA
+  ApplicationRouteGWA:
+    Condition: TypeOfNATGW
+    Condition: DeployInA
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref AppRouteTableA
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateWayA
+  WorkspacesRouteGWA:
+    Condition: TypeOfNATGW
+    Condition: DeployInA
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref WorkspacesRouteTableA
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateWayA
+  DataRouteGWA:
+    Condition: TypeOfNATGW
+    Condition: DeployInA
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref DataRouteTableA
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateWayA
+  ManagementRouteGWA:
+    Condition: TypeOfNATGW
+    Condition: DeployInA
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref ManagementRouteTableA
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateWayA
+# The Routes if using Gateway in B
+  WebRouteGWB:
+    Condition: TypeOfNATGW
+    Condition: DeployInB
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref WebRouteTableB
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateWayB
+  ApplicationRouteGWB:
+    Condition: TypeOfNATGW
+    Condition: DeployInB
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref AppRouteTableB
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateWayB
+  WorkspacesRouteGWB:
+    Condition: TypeOfNATGW
+    Condition: DeployInB
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref WorkspacesRouteTableB
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateWayB
+  DataRouteGWB:
+    Condition: TypeOfNATGW
+    Condition: DeployInB
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref DataRouteTableB
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateWayB
+  ManagementRouteGWB:
+    Condition: TypeOfNATGW
+    Condition: DeployInB
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref ManagementRouteTableB
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateWayB
+# The Routes if using Gateway in C
+  WebRouteGWC:
+    Condition: TypeOfNATGW
+    Condition: DeployInC
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref WebRouteTableC
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateWayC
+  ApplicationRouteGWC:
+    Condition: TypeOfNATGW
+    Condition: DeployInC
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref AppRouteTableC
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateWayC
+  WorkspacesRouteGWC:
+    Condition: TypeOfNATGW
+    Condition: DeployInC
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref WorkspacesRouteTableC
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateWayC
+  DataRouteGWC:
+    Condition: TypeOfNATGW
+    Condition: DeployInC
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref DataRouteTableC
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateWayC
+  ManagementRouteGWC:
+    Condition: TypeOfNATGW
+    Condition: DeployInC
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref ManagementRouteTableC
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateWayC
+# The Routes if using Instance in A
+  WebRouteInstance:
+    Condition: TypeOfNATInstance
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref WebRouteTableA
+      DestinationCidrBlock: 0.0.0.0/0
+      InstanceId: !Ref NATInstance
+  ApplicationRouteInstance:
+    Condition: TypeOfNATInstance
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref AppRouteTableA
+      DestinationCidrBlock: 0.0.0.0/0
+      InstanceId: !Ref NATInstance
+  WorkspacesRouteInstance:
+    Condition: TypeOfNATInstance
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref WorkspacesRouteTableA
+      DestinationCidrBlock: 0.0.0.0/0
+      InstanceId: !Ref NATInstance
+  DataRouteInstance:
+    Condition: TypeOfNATInstance
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref DataRouteTableA
+      DestinationCidrBlock: 0.0.0.0/0
+      InstanceId: !Ref NATInstance
+  ManagementRouteInstance:
+    Condition: TypeOfNATInstance
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref ManagementRouteTableA
+      DestinationCidrBlock: 0.0.0.0/0
+      InstanceId: !Ref NATInstance
