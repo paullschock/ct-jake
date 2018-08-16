@@ -1,0 +1,57 @@
+Things that you need to adjust on the Landing Zone 
+
+aws-landing-zone-centralized-logging-primary.yaml
+L 327 
+
+  # Custom resource to configure Cognito and ES
+  SetupESCognito:
+    Type: 'Custom::SetupESCognito'
+    Version: 1.0
+    Properties:
+      ServiceToken: !GetAtt LambdaESCognito.Arn
+      Domain: !Ref DOMAINNAME
+      CognitoDomain: !Sub ${DOMAINNAME}-${AWS::AccountId}
+#     Domain: !Sub ${DOMAINNAME}-${AWS::AccountId}
+      UserPoolId: !Ref UserPool
+      IdentityPoolId: !Ref IdentityPool
+      RoleArn: !GetAtt CognitoESAccessRole.Arn
+
+manifests.yaml
+L 94 -122
+      #     - name: SharedServicesActiveDirectory
+      #       template_file: templates/core_accounts/aws-landing-zone-aws-active-directory.template
+      #       parameter_file: parameters/core_accounts/aws-landing-zone-aws-active-directory.json
+      #       deploy_method: stack_set
+      #       regions:
+      #         - ap-southeast-2
+      #       ssm_parameters:
+      #         - name: /org/directory_service/ad_server1_private_ip
+      #           value: $[output_ADServer1PrivateIP]
+      #         - name: /org/directory_service/ad_server2_private_ip
+      #           value: $[output_ADServer2PrivateIP]
+      #         - name: /org/directory_service/domain_dns_name
+      #           value: $[output_DomainDNSName]
+      #         - name: /org/directory_service/domain_netbios_name
+      #           value: $[output_DomainNetBIOSName]
+      #         - name: /org/directory_service/domain_admin_user
+      #           value: $[output_DomainAdmin]
+      #         - name: /org/directory_service/domain_member_sg_id
+      #           value: $[output_DomainMemberSGID]
+      #     - name: SharedServicesRDGW
+      #       template_file: templates/core_accounts/aws-landing-zone-rdgw.template
+      #       parameter_file: parameters/core_accounts/aws-landing-zone-rdgw.json
+      #       deploy_method: stack_set
+      #       regions:
+      #         - ap-southeast-2
+      #       ssm_parameters:
+      #         - name: /org/member/sharedservices/rdgw_ip1
+      #           value: $[output_EIP1]
+      # # Organization's Master account
+
+L 156 - 160
+          # - name: PrimaryADConnector
+          #   template_file: templates/core_accounts/aws-landing-zone-aws-ad-connector.template
+          #   parameter_file: parameters/core_accounts/aws-landing-zone-aws-ad-connector.json
+          #   deploy_method: stack_set
+          #   regions:
+          #     - us-east-1
