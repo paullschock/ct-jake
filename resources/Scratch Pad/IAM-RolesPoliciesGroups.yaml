@@ -1,0 +1,141 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create standard Groups to access cross acount roles
+Parameters:
+  # S3 Bucket Details
+  S3BuildBucket:
+    Description: The S3 bucket where cloudformation child templates will be accessed
+    Type: String
+  S3BucketPrefix:
+    Description: The S3 bucket prefix where cloudformation child templates will be accessed
+    Type: String
+  # Associated Account configurations
+  DeployAccount:
+    Description: The ID of the Deploy Account
+    Type: String
+  DevAccount:
+    Description: The ID of the Dev Account
+    Type: String
+  TestAccount:
+    Description: The ID of the Test Account
+    Type: String
+  ProdAccount:
+    Description: The ID of the Prod Account
+    Type: String
+  # Tagging configuration
+  ProjectTag:
+    Description: The Project tag to assign to all AWS resources
+    Type: String
+    MinLength: '3'
+    MaxLength: '255'
+    Default: Base
+  EnvironmentTag:
+    Description: The Environment tag to assign to all AWS resources
+    Type: String
+    MinLength: '3'
+    MaxLength: '255'
+    AllowedValues:
+    - DEV
+    - TEST
+    - PROD
+    Default: PROD
+  ApplicationTag:
+    Description: The Application tag to assign to all AWS resources
+    Type: String
+    MinLength: '3'
+    MaxLength: '255'
+    Default: Base
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: S3 Bucket Configuration
+      Parameters:
+      - S3BuildBucket
+      - S3BucketPrefix
+    - Label:
+        default: Child Accounts
+      Parameters:
+      - DeployAccount
+      - DevAccount
+      - TestAccount
+      - ProdAccount
+    - Label:
+        default: Tagging Configuration
+      Parameters:
+      - ProjectTag
+      - EnvironmentTag
+      - ApplicationTag
+Resources:
+  AWSEC2AdministratorPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: The Policy for EC2 Administrators
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Sid: CrossAccount
+          Effect: Allow
+          Action:
+          - sts:AssumeRole
+          Resource:
+          - !Sub "arn:aws:iam::${DeployAccount}:role/AWS-EC2Administrator" # Deploy
+          - !Sub "arn:aws:iam::${DevAccount}:role/AWS-EC2Administrator" # Dev
+          - !Sub "arn:aws:iam::${TestAccount}:role/AWS-EC2Administrator" # Test
+          - !Sub "arn:aws:iam::${ProdAccount}:role/AWS-EC2Administrator" # Prod
+        - Sid: AWSEC2AdministratorDeny
+          Effect: Deny
+          Action:
+          - ec2:TerminateInstances
+          Resource: "*"
+        ManagedPolicyName: "AWS-EC2Administrator"
+  AWSVPCAdministrator:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Sid: CrossAccount
+          Effect: Allow
+          Action:
+          - sts:AssumeRole
+          Resource:
+          - !Sub "arn:aws:iam::${DeployAccount}:role/AWS-VPCAdministrator" # Deploy
+          - !Sub "arn:aws:iam::${DevAccount}:role/AWS-VPCAdministrator" # Dev
+          - !Sub "arn:aws:iam::${TestAccount}:role/AWS-VPCAdministrator" # Test
+          - !Sub "arn:aws:iam::${ProdAccount}:role/AWS-VPCAdministrator" # Prod
+      ManagedPolicyName: "AWS-VPCAdministrator"
+  ReadOnly:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Effect: Allow
+          Action:
+          - sts:AssumeRole
+          Resource:
+          - !Sub "arn:aws:iam::${DeployAccount}:role/ReadOnly" # Deploy
+          - !Sub "arn:aws:iam::${DevAccount}:role/ReadOnly" # Dev
+          - !Sub "arn:aws:iam::${TestAccount}:role/ReadOnly" # Test
+          - !Sub "arn:aws:iam::${ProdAccount}:role/ReadOnly" # Prod
+      ManagedPolicyName: "ReadOnly"
+  AWSEC2Administrator:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Join [ "", [ "https://s3-", !Ref "AWS::Region", ".amazonaws.com/", !Ref S3BuildBucket, "/", !Ref S3BucketPrefix, "/Base-IAM-Group.yaml" ] ]
+      Parameters:
+        GroupName: "AWS-EC2-Administrator"
+        GroupPolicyARNs: !Ref AWSEC2AdministratorPolicy
+        NameTag: "AWS-EC2-Administrator"
+        EnvironmentTag: !Ref EnvironmentTag
+        ApplicationTag: !Ref ApplicationTag
+      Tags:
+      - Key: Name
+        Value: !Join [ "", [ Ref: 'AWS::StackName', "-AWS-EC2-Administrator" ] ]
+      - Key: Project
+        Value: !Ref ProjectTag
+      - Key: Environment
+        Value: !Ref EnvironmentTag
+      - Key: Application
+        Value: !Ref ApplicationTag
+      TimeoutInMinutes: 5
