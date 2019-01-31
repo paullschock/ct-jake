@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "2.2",
+  "description": "This document is used to collect and archive ECS Logs for Support purposes",
+  "parameters": {
+    "instance": {
+      "type": "String",
+      "description": "The EC2 Instance ID to apply this to"
+    },
+    "bucket": {
+      "type": "String",
+      "description": "The bucket to copy the output file to"
+    },
+    "prefix": {
+      "type": "String",
+      "description": "The bucket prefix to copy the output file to"
+    }
+  },
+  "mainSteps": [
+    {
+      "action": "aws:runShellScript",
+      "name": "ArchiveAndPushLogs",
+      "inputs": {
+        "runCommand": [
+          "curl -O https://raw.githubusercontent.com/awslabs/ecs-logs-collector/master/ecs-logs-collector.sh",
+          "sudo bash ./ecs-logs-collector.sh",
+          "aws s3 cp /collect-{{instance}}.tgz s3://{{bucket}}/{{prefix}}/"
+        ]
+      }
+    }
+  ]
+}

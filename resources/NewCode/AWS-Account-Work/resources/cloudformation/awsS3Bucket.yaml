@@ -1,0 +1,22 @@
+Description: >
+  This template deploys an ECS cluster to the provided VPC and subnets
+  using an Auto Scaling Group
+
+Parameters:
+  BucketName:
+    Description: The name that you'd like to give to the bucket, this name has to be globally unique
+    Type: String
+    AllowedPattern: (?=^.{3,63}$)(?!^(\d+\.)+\d+$)(^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)*([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$)
+
+Resources:
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: PublicRead
+      BucketName: !Ref BucketName
+    DeletionPolicy: Retain
+
+Outputs:
+  S3BucketSecureURL:
+    Value: !Ref S3Bucket
+    Description: Name of S3 bucket to hold website content

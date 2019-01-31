@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: The Role in use with the ECS Cluster
+Resources:
+  ServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+      Path: /
+      AssumeRolePolicyDocument: |
+        {
+            "Statement": [{
+                "Effect": "Allow",
+                "Principal": { "Service": [ "ecs.amazonaws.com", "ec2.amazonaws.com" ]},
+                "Action": [ "sts:AssumeRole" ]
+            }]
+        }
+      Policies:
+        - PolicyName: !Sub ecs-service-${AWS::StackName}
+          PolicyDocument:
+            {
+              "Version": "2012-10-17",
+              "Statement": [{
+                              "Effect": "Allow",
+                              "Action": [
+                                "ec2:AuthorizeSecurityGroupIngress",
+                                "ec2:Describe*",
+                                "cloudwatch:*",
+                                "elasticloadbalancing:DeregisterInstancesFromLoadBalancer",
+                                "elasticloadbalancing:Describe*",
+                                "elasticloadbalancing:RegisterInstancesWithLoadBalancer",
+                                "elasticloadbalancing:DeregisterTargets",
+                                "elasticloadbalancing:DescribeTargetGroups",
+                                "elasticloadbalancing:DescribeTargetHealth",
+                                "elasticloadbalancing:RegisterTargets",
+                                "logs:CreateLogGroup",
+                                "logs:CreateLogStream",
+                                "logs:PutLogEvents",
+                                "logs:DescribeLogStreams"
+                              ],
+                              "Resource": "*"
+                            }]
+            }
+Outputs:
+  IAMRoleName:
+    Description: The Name of the Role
+    Value: !Ref ServiceRole
+    Export:
+      Name: !Sub "${AWS::StackName}-SupportRole"
+  IAMRoleArn:
+    Description: The Amazon resource Name for the IAM Role
+    Value: !GetAtt ServiceRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ServiceRole"

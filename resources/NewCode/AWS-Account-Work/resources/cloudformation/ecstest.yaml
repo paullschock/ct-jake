@@ -1,0 +1,161 @@
+Description: >
+  This template deploys an ECS cluster to the provided VPC and subnets
+  using an Auto Scaling Group
+
+Parameters:
+
+  InstanceType:
+    Description: Which instance type should we use to build the ECS cluster?
+    Type: String
+    Default: r4.large
+
+  AMI:
+    Description: The value of the Amazon Machine Image to use when creating ECS Instances in EC2
+    Type: String
+    Default: ami-00f815702af6b8889
+
+  KeyPair:
+    Description: The key pair to use with the EC2 insatance
+    Type: String
+    Default: jake-cns-ecr
+
+  ClusterSize:
+    Description: How many ECS hosts do you want to initially deploy?
+    Type: Number
+    Default: 4
+
+  VPC:
+    Description: Choose which VPC this ECS cluster should be deployed to
+    Type: AWS::EC2::VPC::Id
+
+  Subnets:
+    Description: Choose which subnets this ECS cluster should be deployed to
+    Type: List<AWS::EC2::Subnet::Id>
+
+  SecurityGroup:
+    Description: Select the Security Group to use for the ECS cluster hosts
+    Type: AWS::EC2::SecurityGroup::Id
+
+  InstanceRole:
+    Description: EC2 IAM role name
+    Type: String
+
+  InfrastructureEnvironment:
+    Description: The infrastructure environment being created prod-1, uat-1, etc
+    Type: String
+
+  BaseEnvironment:
+    Description: An environment name that will be prefixed to resource names
+    Type: String
+
+Resources:
+
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub cns-ecs-cluster-products-${InfrastructureEnvironment}
+
+  ECSAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier: !Ref Subnets
+      LaunchConfigurationName: !Ref ECSLaunchConfiguration
+      MinSize: !Ref ClusterSize
+      MaxSize: !Ref ClusterSize
+      DesiredCapacity: !Ref ClusterSize
+      Tags:
+        - Key: Name
+          Value: !Sub cns-ec2-instance-products-${InfrastructureEnvironment}
+          PropagateAtLaunch: true
+        - Key: Department
+          Value: Technology
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: !Ref BaseEnvironment
+          PropagateAtLaunch: true
+        - Key: Service
+          Value: products
+          PropagateAtLaunch: true
+        - Key: Country
+          Value: Australia
+          PropagateAtLaunch: true
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT15M
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: 1
+        MaxBatchSize: 1
+        PauseTime: PT15M
+        WaitOnResourceSignals: true
+
+  ECSLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId:  !Ref AMI
+      KeyName: !Ref KeyPair
+      InstanceType: !Ref InstanceType
+      SecurityGroups:
+        - !Ref SecurityGroup
+      IamInstanceProfile: !Ref ECSInstanceProfile
+      UserData:
+        "Fn::Base64": !Sub |
+          #!/bin/bash
+          yum install -y aws-cfn-bootstrap
+          /opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource ECSLaunchConfiguration
+          /opt/aws/bin/cfn-signal -e $? --region ${AWS::Region} --stack ${AWS::StackName} --resource ECSAutoScalingGroup
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          commands:
+            01_add_instance_to_cluster:
+              command: !Sub echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config
+# Below is newly added code to be added going forward
+            02_install_aws_ssm_agent:
+              command: sudo yum install -y "https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm"
+            03_restart_ssm_agent:
+              command: sudo start amazon-ssm-agent
+            04_install_logs_agent:
+              command: sudo yum install -y awslogs
+            05_install_awscli:
+              command: sudo yum install -y aws-cli
+#            06_install_cloudutils:
+#              command: sudo yum install -y cloud-utils
+          files:
+            "/etc/cfn/cfn-hup.conf":
+              mode: 000400
+              owner: root
+              group: root
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+
+            "/etc/cfn/hooks.d/cfn-auto-reloader.conf":
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.ContainerInstances.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource ECSLaunchConfiguration
+
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: true
+                ensureRunning: true
+                files:
+                  - /etc/cfn/cfn-hup.conf
+                  - /etc/cfn/hooks.d/cfn-auto-reloader.conf
+
+  ECSInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref InstanceRole
+
+Outputs:
+
+  Cluster:
+    Description: A reference to the ECS cluster
+    Value: !Ref ECSCluster

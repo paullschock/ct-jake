@@ -1,0 +1,155 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Enable AWS Config
+
+Parameters:
+
+  AllSupported:
+    Type: String
+    Default: 'true'
+    Description: Indicates whether to record all supported resource types.
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  IncludeGlobalResourceTypes:
+    Type: String
+    Default: 'true'
+    Description: Indicates whether AWS Config records all supported global resource types.
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  ResourceTypes:
+    Type: CommaDelimitedList
+    Description: A list of valid AWS resource types to include in this recording group. Eg. AWS::CloudTrail::Trail
+    Default: AWS::CloudTrail::Trail
+
+  DeliveryChannelName:
+    Type: String
+    Default: 'DeliveryChannel'
+    Description: The name of the delivery channel.
+
+  Frequency:
+    Type: String
+    Default: 24hours
+    Description: The frequency with which AWS Config delivers configuration snapshots.
+    AllowedValues:
+      - 1hour
+      - 3hours
+      - 6hours
+      - 12hours
+      - 24hours
+
+  BucketName:
+    Type: String
+    Description: Bucket name from the Logging Account
+    AllowedPattern: (?=^.{3,63}$)(?!^(\d+\.)+\d+$)(^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)*([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$)
+
+  ConfigBucketPolicyName:
+    Type: String
+    Description: The name of the Config Bucket Policy
+    Default: ConfigBucketPolicy
+
+Conditions:
+  IsAllSupported: !Equals
+    - !Ref AllSupported
+    - 'true'
+  IsGeneratedDeliveryChannelName: !Equals
+    - !Ref DeliveryChannelName
+    - ''
+
+Mappings:
+
+  Settings:
+    FrequencyMap:
+      1hour   : One_Hour
+      3hours  : Three_Hours
+      6hours  : Six_Hours
+      12hours : Twelve_Hours
+      24hours : TwentyFour_Hours
+
+Resources:
+
+  ConfigRecorderRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - config.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSConfigRole
+
+  BucketPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action: s3:ListBucket
+            Effect: Allow
+            Resource:
+              - !Join ['', ['arn:aws:s3:::', !Ref 'S3Bucket']]
+          - Action: ['s3:PutObject', 's3:GetObject']
+            Effect: Allow
+            Resource:
+              - !Join ['', ['arn:aws:s3:::', !Ref 'S3Bucket', /*]]
+      PolicyName: !Ref ConfigBucketPolicyName
+      Roles: [!Ref 'ConfigRecorderRole']
+
+  ConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Properties:
+      RoleARN: !GetAtt ConfigRecorderRole.Arn
+      RecordingGroup:
+        AllSupported: !Ref AllSupported
+        IncludeGlobalResourceTypes: !Ref IncludeGlobalResourceTypes
+        ResourceTypes: !If
+          - IsAllSupported
+          - !Ref AWS::NoValue
+          - !Ref ResourceTypes
+
+  ConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    Properties:
+      Name: !If
+        - IsGeneratedDeliveryChannelName
+        - !Ref AWS::NoValue
+        - !Ref DeliveryChannelName
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: !FindInMap
+          - Settings
+          - FrequencyMap
+          - !Ref Frequency
+      S3BucketName: !Ref BucketName
+
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+      BucketName: !Ref BucketName
+
+
+
+Outputs:
+
+  RecorderBucketName:
+    Description: The Name of the S3 bucket where AWS Snapshots are stored
+    Value: !Ref BucketName
+
+  ConfigIAMRole:
+    Description: The IAM Role in use by the AWS Config Service
+    Value: !Ref ConfigRecorderRole
+#    Export: !Sub $(AWS::StackName).$(ConfiRecorderRole)
+
+  BucketPolicy:
+    Description: The AWS S3 Bucket policy
+    Value: !Ref BucketPolicy
+#    Export: !Sub $(AWS::StackName).$(BucketPolicy)

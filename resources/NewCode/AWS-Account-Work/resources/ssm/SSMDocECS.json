@@ -1,0 +1,45 @@
+{
+    "schemaVersion": "2.2",
+    "description": "This document configures ECS Clusters to report Instance and Appplication logs up to CloudWatch",
+    "parameters": {
+        "bucket": {
+            "type": "String",
+            "description": "The name of the bucket where the config file is located"
+        },
+        "prefix": {
+            "type": "String",
+            "description": "The folder in the bucket where the config file is located"
+        },
+        "configfile": {
+            "type": "String",
+            "description": "The name of the config folder",
+            "default" : "awslogs.conf"
+        },
+        "region": {
+            "type": "String",
+            "description": "The region where the container instance is running ",
+            "default" : "ap-southeast-2"
+        }
+    },
+    "mainSteps": [
+        {
+            "action": "aws:runShellScript",
+            "name": "configECSandCW",
+            "inputs": {
+                "runCommand": [
+                    "sudo yum install -y awslogs",
+                    "sudo yum install -y jq",
+                    "sudo mv /etc/awslogs/awslogs.conf /etc/awslogs/awslogs.conf.bak",
+                    "aws s3 cp s3://{{bucket}}/{{prefix}}/{{configfile}} /etc/awslogs/",
+                    "cluster=$(curl -s http://localhost:51678/v1/metadata | jq -r '. | .Cluster')",
+                    "sudo sed -i -e \"s/{cluster}/$cluster/g\" /etc/awslogs/awslogs.conf",
+                    "container_instance_id=$(curl -s http://localhost:51678/v1/metadata | jq -r '. | .ContainerInstanceArn' | awk -F/ '{print $2}' )",
+                    "sudo sed -i -e \"s/{container_instance_id}/$container_instance_id/g\" /etc/awslogs/awslogs.conf",
+                    "sudo service awslogs start",
+                    "sudo chkconfig awslogs on",
+                    "sudo sed -i 's/us-east-1/{{region}}/' /etc/awslogs/awscli.conf "
+                ]
+            }
+        }
+    ]
+}
